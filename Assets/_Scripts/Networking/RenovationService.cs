@@ -7,6 +7,7 @@ using HouseFlip.Economy;
 using HouseFlip.Furniture;
 using HouseFlip.Painting;
 using HouseFlip.Player;
+using HouseFlip.Polish;
 using HouseFlip.Repair;
 using Unity.Netcode;
 using UnityEngine;
@@ -259,11 +260,17 @@ namespace HouseFlip.Networking
             PlayerStatsTracker.Record(sender, PlayerStat.HouseValueAdded, data.valueContribution);
             PlayerStatsTracker.Record(sender, PlayerStat.DesignPointsAdded, data.designPoints);
 
-            PlacedClientRpc();
+            PlacedClientRpc(position);
         }
 
         [ClientRpc]
-        private void PlacedClientRpc() => GameEvents.RaiseSfx(SfxId.BuildComplete);
+        private void PlacedClientRpc(Vector3 position)
+        {
+            GameEvents.RaiseSfx(SfxId.BuildComplete);
+
+            // A small thump so a placement lands rather than silently appearing.
+            ImpactFeedback.Shake(position, 0.12f);
+        }
 
         // ==================================================================
         // Selling furniture back

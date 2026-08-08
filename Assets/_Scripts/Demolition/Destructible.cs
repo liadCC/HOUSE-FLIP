@@ -3,6 +3,7 @@ using HouseFlip.Economy;
 using HouseFlip.Interaction;
 using HouseFlip.Networking;
 using HouseFlip.Player;
+using HouseFlip.Polish;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -223,17 +224,40 @@ namespace HouseFlip.Demolition
         }
 
         [ClientRpc]
-        private void PlaySwingClientRpc() => GameEvents.RaiseSfx(SfxId.HammerHit);
+        private void PlaySwingClientRpc()
+        {
+            GameEvents.RaiseSfx(SfxId.HammerHit);
+
+            // Land the swing before the object is gone: flash, a chip of debris, a nudge.
+            HitFlash.FlashOn(gameObject, DebrisTint);
+            ImpactFeedback.Play(transform.position, 0.16f, DebrisTint, debrisPieces: 3, debrisForce: 2.2f);
+        }
 
         [ClientRpc]
         private void DestroyEffectsClientRpc()
         {
             GameEvents.RaiseSfx(SfxId.ObjectBreak);
 
+            // Structural collapse hits harder than a cabinet giving up.
+            float trauma = isStructural ? 0.7f : 0.45f;
+            ImpactFeedback.Play(transform.position, trauma, DebrisTint, debrisPieces: 12, debrisForce: 4.5f);
+
             if (debrisEffect != null)
             {
                 debrisEffect.transform.SetParent(null, true);
                 debrisEffect.Play();
+            }
+        }
+
+        /// <summary>Debris takes the object's own colour so a red wall sheds red chunks.</summary>
+        private Color DebrisTint
+        {
+            get
+            {
+                Renderer renderer = GetComponentInChildren<Renderer>();
+                return renderer != null && renderer.sharedMaterial != null
+                    ? renderer.sharedMaterial.color
+                    : new Color(0.72f, 0.68f, 0.62f);
             }
         }
     }

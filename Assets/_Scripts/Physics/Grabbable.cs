@@ -1,6 +1,7 @@
 using HouseFlip.Core;
 using HouseFlip.Interaction;
 using HouseFlip.Player;
+using HouseFlip.Polish;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -303,6 +304,17 @@ namespace HouseFlip.PhysicsGrab
         }
 
         [ClientRpc]
-        private void NotifySfxClientRpc(SfxId id) => GameEvents.RaiseSfx(id);
+        private void NotifySfxClientRpc(SfxId id)
+        {
+            GameEvents.RaiseSfx(id);
+
+            // Heft: hurling a fridge should kick harder than tossing a lamp.
+            if (id == SfxId.Throw)
+            {
+                float weight = category == MassCategory.Heavy ? 0.32f
+                    : category == MassCategory.Medium ? 0.18f : 0.08f;
+                ImpactFeedback.Shake(transform.position, weight);
+            }
+        }
     }
 }

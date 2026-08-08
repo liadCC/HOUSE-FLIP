@@ -2,6 +2,7 @@ using System.Text;
 using HouseFlip.Core;
 using HouseFlip.GameFlow;
 using HouseFlip.Player;
+using HouseFlip.Polish;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,6 +26,11 @@ namespace HouseFlip.UI
 
         private float _warningTimer;
         private readonly StringBuilder _builder = new StringBuilder();
+
+        private bool _budgetInitialised;
+        private bool _houseValueInitialised;
+        private float _lastHouseValue;
+        private float _valueColorTimer;
 
         private void Awake()
         {
@@ -100,6 +106,16 @@ namespace HouseFlip.UI
                     warningLabel.enabled = false;
                 }
             }
+
+            // Let the gain/loss tint fade back to the neutral colour.
+            if (_valueColorTimer > 0f)
+            {
+                _valueColorTimer -= Time.deltaTime;
+                if (_valueColorTimer <= 0f && houseValueLabel != null)
+                {
+                    houseValueLabel.color = UIFactory.Good;
+                }
+            }
         }
 
         private void UpdatePlayerList()
@@ -150,19 +166,45 @@ namespace HouseFlip.UI
 
         private void OnBudgetChanged(float value)
         {
-            if (budgetLabel != null)
+            if (budgetLabel == null)
             {
-                budgetLabel.text = $"${value:N0}";
-                budgetLabel.color = value <= 0f ? UIFactory.Bad : UIFactory.Accent;
+                return;
             }
+
+            budgetLabel.text = $"${value:N0}";
+            budgetLabel.color = value <= 0f ? UIFactory.Bad : UIFactory.Accent;
+
+            // Skip the punch on the initial population, or the HUD pops on spawn.
+            if (_budgetInitialised)
+            {
+                ScalePunch.PunchOn(budgetLabel.gameObject, 0.18f);
+            }
+
+            _budgetInitialised = true;
         }
 
         private void OnHouseValueChanged(float value)
         {
-            if (houseValueLabel != null)
+            if (houseValueLabel == null)
             {
-                houseValueLabel.text = $"${value:N0}";
+                return;
             }
+
+            houseValueLabel.text = $"${value:N0}";
+
+            if (_houseValueInitialised)
+            {
+                // Green when the house gained value, red when the team just cost themselves
+                // money — the direction is more useful at a glance than the number.
+                bool gained = value >= _lastHouseValue;
+                houseValueLabel.color = gained ? UIFactory.Good : UIFactory.Bad;
+                _valueColorTimer = 1.2f;
+
+                ScalePunch.PunchOn(houseValueLabel.gameObject, gained ? 0.2f : 0.28f);
+            }
+
+            _lastHouseValue = value;
+            _houseValueInitialised = true;
         }
 
         private void OnTimerChanged(float secondsRemaining)

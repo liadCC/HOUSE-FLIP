@@ -14,11 +14,14 @@ The design document this implementation follows is in [`docs/GDD.md`](docs/GDD.m
    open pulls `com.unity.netcode.gameobjects` and the other packages from
    `Packages/manifest.json`.
 2. Menu → **House Flip → Build MVP Scene**. This generates the placeholder art, the
-   prefabs, the ScriptableObject catalog and the scene at
+   prefabs, the ScriptableObject catalog, the synthesised sound set and the scene at
    `Assets/_Scenes/HouseFlip_MVP.unity`, and adds it to Build Settings.
 3. Press **Play**, then **HOST GAME**.
 4. To test multiplayer, build a standalone player (or use ParrelSync / a second editor)
    and press **JOIN GAME** against `127.0.0.1:7777`.
+
+*House Flip → Generate Placeholder Audio* regenerates just the sound set if you want to
+re-roll it without rebuilding the scene.
 
 The scene is a build artefact — regenerating it discards hand edits. That is deliberate
 while systems are still moving; once the art pass starts, stop regenerating and edit the
@@ -65,7 +68,8 @@ Assets/_Scripts/
   GameFlow/     GameManager state machine, timer, lobby, inspection, awards
   UI/           HUD, prompts, catalog, inspection and awards screens
   Audio/        AudioManager driven off the event bus
-  Editor/       Scene and asset generators
+  Polish/       Camera shake, debris, hit flash, scale punch
+  Editor/       Scene, asset and audio generators
 ```
 
 Three rules hold the whole thing together:
@@ -93,7 +97,7 @@ rather than silence.
 
 ## Implementation status against the GDD
 
-Phases 1–17 of the development order (GDD §5) are implemented. Phase 18 (polish) is not.
+All 18 phases of the development order (GDD §5) are implemented.
 
 | MVP feature (GDD §4) | Status |
 |---|---|
@@ -112,27 +116,56 @@ Phases 1–17 of the development order (GDD §5) are implemented. Phase 18 (poli
 | Player awards | Implemented — 6 individual + team |
 | 3 random events | Implemented — leak, outage, inspector |
 | HUD | Implemented |
-| Audio | Wired, **no clips shipped** — see below |
+| Audio | Implemented — all 11 GDD §24 triggers, synthesised placeholder clips |
+| Polish (Phase 18) | Implemented — shake, debris, hit flash, HUD punch |
 
-### What is deliberately missing
+### Audio
 
-- **Audio clips.** `AudioManager` is fully wired to the event bus and every trigger in
-  GDD §24 fires, but the project ships no `.wav` files, so it runs silent. Drop clips
-  into the `sfx` list on the `UI` object and they play.
+Rather than ship silent, the project synthesises its own sound set. `SfxSynth` builds
+each cue from sine sweeps, filtered noise and decay envelopes, `WavWriter` encodes them
+to 16-bit PCM, and the scene builder wires them into `AudioManager` by `SfxId`. There is
+also a 16-second looping backing track — a walking bass under a C-major arpeggio.
+
+They are placeholders and they sound like it. Replacing one means dropping a real `.wav`
+over the generated file: the manager looks clips up by id, never by filename.
+
+### Polish (Phase 18)
+
+- **Camera shake** — trauma-based, decaying, Perlin-driven, with quadratic falloff by
+  distance so a wall coming down across the house rumbles rather than jolts.
+- **Debris** — real pooled rigidbody chunks tinted to the destroyed object's colour.
+  Physical rather than particles on purpose: in a physics comedy, rubble that skitters
+  under the sofa earns its cost. Purely local, never networked.
+- **Hit flash** and **scale punch** on impacts, placements and changing HUD numbers.
+  The house value label tints green or red by direction of change.
+
+### What is still missing
+
 - **Art.** Everything is coloured primitives. The prefabs are structured so a mesh swap
   is all that's needed — no gameplay data lives in the models.
 - **Animation.** No locomotion blend tree; characters slide. GDD §6 calls this
   sufficient for MVP.
-- **Polish (Phase 18).** No particles, camera shake or juice. Hook points exist
-  (`Destructible.debrisEffect`, `DirtSource.cleanEffect`, `BurstPipe.sprayEffect`).
+- **Tuning.** The balance numbers in `GameConstants` are a first pass, not playtested
+  values.
 
-### Not yet verified
+### Verification status
 
-The C# is syntax-checked but **has not been compiled against Unity's assemblies or run** —
-there is no Unity installation in the environment this was written in. Expect to fix
-compile errors on first open, most likely around Netcode API drift between versions.
-Nothing here has been playtested, so the balance numbers in `GameConstants` are a
-first pass, not tuned values.
+There is no Unity installation in the environment this was written in, so the code was
+verified two ways short of running it:
+
+1. **Compiled** against hand-written stubs of the UnityEngine, uGUI, Netcode and
+   UnityEditor surfaces it uses, in both configurations Unity itself builds — editor
+   (`UNITY_EDITOR` defined, all scripts) and player (Editor scripts excluded). Both are
+   clean, zero errors and zero warnings. This catches typos, wrong signatures, missing
+   usings and bad types, but the stubs are a reconstruction of Unity's API — where a
+   remembered signature is wrong, the stub and the call site can be wrong together.
+2. **Executed** for the audio path, which has no Unity dependency: all 17 clips are
+   generated, header-validated and checked for level and NaNs. (This found and fixed a
+   real bug — the de-click fade was erasing the attack transient of percussive sounds.)
+
+What that does **not** cover: Netcode's RPC source generators, Unity's own analyzers, and
+anything about runtime behaviour. **Nothing here has been played.** Expect to fix some
+things on first open.
 
 ## Post-MVP
 

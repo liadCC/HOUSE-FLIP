@@ -13,6 +13,7 @@ using HouseFlip.Networking;
 using HouseFlip.Painting;
 using HouseFlip.PhysicsGrab;
 using HouseFlip.Player;
+using HouseFlip.Polish;
 using HouseFlip.Repair;
 using HouseFlip.UI;
 using Unity.Netcode;
@@ -81,6 +82,9 @@ namespace HouseFlip.EditorTools
 
                 PlacementCatalog catalog = HouseFlipAssetBuilder.BuildCatalog();
 
+                EditorUtility.DisplayProgressBar("House Flip", "Synthesising placeholder audio…", 0.15f);
+                var audioClips = HouseFlipAudioBuilder.GenerateClips();
+
                 EditorUtility.DisplayProgressBar("House Flip", "Building the player prefab…", 0.2f);
                 GameObject playerPrefab = BuildPlayerPrefab(catalog);
 
@@ -101,7 +105,7 @@ namespace HouseFlip.EditorTools
                 HouseInspectorNPC inspector = BuildInspectorNPC();
                 BuildSystems(catalog, pipes, fuseBox, inspector);
                 BuildNetworking(playerPrefab, catalog);
-                BuildUI(catalog);
+                BuildUI(catalog, audioClips);
 
                 EditorUtility.DisplayProgressBar("House Flip", "Saving…", 0.95f);
                 EditorSceneManager.SaveScene(scene, ScenePath);
@@ -683,7 +687,8 @@ namespace HouseFlip.EditorTools
             HouseFlipAssetBuilder.SetPrivateArray(registrar, "prefabs", runtimePrefabs);
         }
 
-        private static void BuildUI(PlacementCatalog catalog)
+        private static void BuildUI(PlacementCatalog catalog,
+            Dictionary<Core.SfxId, AudioClip> audioClips)
         {
             var camera = new GameObject("CameraRig");
             camera.AddComponent<PlayerCameraRig>();
@@ -695,6 +700,10 @@ namespace HouseFlip.EditorTools
             cam.fieldOfView = 65f;
             cam.nearClipPlane = 0.05f;
             cameraChild.AddComponent<AudioListener>();
+
+            // Shake sits on the camera, not the rig, so it layers on top of the follow
+            // logic instead of being overwritten by it every frame (GDD 18 — Polish).
+            cameraChild.AddComponent<CameraShake>();
 
             camera.transform.position = new Vector3(0.5f, 4f, -8f);
             camera.transform.rotation = Quaternion.Euler(14f, 0f, 0f);
@@ -710,7 +719,8 @@ namespace HouseFlip.EditorTools
             var catalogUI = ui.AddComponent<CatalogUI>();
             HouseFlipAssetBuilder.SetPrivateField(catalogUI, "catalog", catalog);
 
-            ui.AddComponent<AudioManager>();
+            var audio = ui.AddComponent<AudioManager>();
+            HouseFlipAudioBuilder.WireInto(audio, audioClips);
 
             // uGUI needs an EventSystem to route clicks to the lobby buttons.
             var eventSystem = new GameObject("EventSystem");

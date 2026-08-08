@@ -121,12 +121,19 @@ namespace HouseFlip.Events
                 indicatorRenderer.SetPropertyBlock(_block);
             }
 
+            if (tripped)
+            {
+                GameEvents.RaiseSfx(SfxId.ElectricalSpark);
+
+                // The lights going out should land as a jolt, wherever you are standing.
+                Polish.ImpactFeedback.ShakeLocal(0.4f);
+            }
+
             if (sparkEffect != null)
             {
                 if (tripped && !sparkEffect.isPlaying)
                 {
                     sparkEffect.Play();
-                    GameEvents.RaiseSfx(SfxId.ElectricalSpark);
                 }
                 else if (!tripped && sparkEffect.isPlaying)
                 {

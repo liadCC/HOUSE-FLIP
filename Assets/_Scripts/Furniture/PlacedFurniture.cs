@@ -3,6 +3,7 @@ using HouseFlip.Core;
 using HouseFlip.Economy;
 using HouseFlip.Interaction;
 using HouseFlip.Player;
+using HouseFlip.Polish;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -27,6 +28,14 @@ namespace HouseFlip.Furniture
         private bool _counted;
 
         public PlaceableData Data => _data;
+
+        public override void OnNetworkSpawn()
+        {
+            // Land with a bounce so a purchase feels like it arrived (GDD 18 — Polish).
+            // Kept small: the collider scales with the transform, and a big punch would
+            // briefly push the item through whatever it was placed against.
+            ScalePunch.PunchOn(gameObject, 0.16f);
+        }
 
         /// <summary>Server only. Called immediately after spawn.</summary>
         public void ServerInitialise(PlaceableData data, RoomController room)
