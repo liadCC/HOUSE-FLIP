@@ -46,15 +46,18 @@ namespace HouseFlip.Player
         [SerializeField] private float swingDuration = 0.42f;
         [SerializeField] private float swingAngle = 115f;
 
+        [Tooltip("Observed downward speed, in m/s, above which the character counts as falling.")]
+        [SerializeField] private float fallThreshold = 2.5f;
+
         private PlayerController _player;
-        private CharacterController _controller;
 
         private Vector3 _lastPosition;
         private float _smoothedSpeed;
+        private float _fallSpeed;
         private float _cycle;
         private float _squash;
         private float _swingTimer = -1f;
-        private bool _wasGrounded = true;
+        private bool _wasFalling;
 
         private Vector3 _bodyBasePosition, _headBasePosition;
         private Vector3 _bodyBaseScale;
@@ -63,7 +66,6 @@ namespace HouseFlip.Player
         private void Awake()
         {
             _player = GetComponent<PlayerController>();
-            _controller = GetComponent<CharacterController>();
             _lastPosition = transform.position;
             CaptureRestPose();
         }
@@ -112,6 +114,8 @@ namespace HouseFlip.Player
             Vector3 delta = transform.position - _lastPosition;
             _lastPosition = transform.position;
 
+            _fallSpeed = -delta.y / dt;
+
             delta.y = 0f;
             float speed = delta.magnitude / dt;
 
@@ -122,14 +126,19 @@ namespace HouseFlip.Player
 
         private void UpdateLanding(float dt)
         {
-            bool grounded = _controller == null || _controller.isGrounded;
+            // Landing is read off the transform, not off CharacterController.isGrounded.
+            // isGrounded is only refreshed by whoever calls Move(), and only the owning
+            // client does that — on every other peer a remote player's controller reports
+            // "airborne" for the whole session, so the squash would never once fire for the
+            // three characters you actually spend the game watching.
+            bool falling = _fallSpeed > fallThreshold;
 
-            if (grounded && !_wasGrounded)
+            if (_wasFalling && !falling)
             {
                 _squash = landSquash;
             }
 
-            _wasGrounded = grounded;
+            _wasFalling = falling;
             _squash = Mathf.MoveTowards(_squash, 0f, landRecoverySpeed * dt);
         }
 
@@ -149,6 +158,21 @@ namespace HouseFlip.Player
         public void PlaySwing()
         {
             _swingTimer = 0f;
+        }
+
+        /// <summary>
+        /// Call after any non-locomotive jump in the transform (a spawn-point teleport).
+        ///
+        /// Speed here is measured as distance over frame time, so a metres-wide jump in one
+        /// frame reads as hundreds of metres per second: without this the character would
+        /// spend the first half-second after spawning windmilling its limbs at full stride.
+        /// </summary>
+        public void NotifyTeleported()
+        {
+            _lastPosition = transform.position;
+            _smoothedSpeed = 0f;
+            _fallSpeed = 0f;
+            _wasFalling = false;
         }
 
         private void ApplyLimbs(float gait)

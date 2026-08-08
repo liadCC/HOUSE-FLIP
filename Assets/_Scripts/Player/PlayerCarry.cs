@@ -197,6 +197,19 @@ namespace HouseFlip.Player
             }
         }
 
+        /// <summary>
+        /// Server only. Called by <see cref="Grabbable"/> as it despawns, because the id we
+        /// hold would otherwise outlive the object it names and leave this player stuck
+        /// "carrying" nothing — unable to grab anything else, with no prompt to explain why.
+        /// </summary>
+        public void ServerNotifyHeldDespawned(ulong networkObjectId)
+        {
+            if (IsServer && _heldObjectId.Value == networkObjectId)
+            {
+                _heldObjectId.Value = 0UL;
+            }
+        }
+
         public override void OnNetworkDespawn()
         {
             // Someone rage-quit while holding the fridge — put it down rather than

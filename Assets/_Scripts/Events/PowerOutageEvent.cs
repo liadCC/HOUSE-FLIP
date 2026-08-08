@@ -24,7 +24,7 @@ namespace HouseFlip.Events
 
         private Color _originalAmbient;
         private float _originalAmbientIntensity;
-        private bool _cached;
+        private bool _ambientCached;
         private float _blend;
 
         private void Awake()
@@ -35,15 +35,28 @@ namespace HouseFlip.Events
             }
         }
 
-        private void CacheLighting()
+        private void CacheAmbient()
         {
-            if (_cached)
+            if (_ambientCached)
             {
                 return;
             }
 
             _originalAmbient = RenderSettings.ambientLight;
             _originalAmbientIntensity = RenderSettings.ambientIntensity;
+            _ambientCached = true;
+        }
+
+        /// <summary>
+        /// Sampled on the rising edge of each blackout rather than once, because this
+        /// handler spawns with the scene — in the lobby, before the round exists. A cache
+        /// taken then can never contain the lamps players buy and place during the round,
+        /// so those lights would keep burning through a "power outage".
+        /// </summary>
+        private void CaptureLights()
+        {
+            _houseLights.Clear();
+            _originalIntensities.Clear();
 
             foreach (Light light in FindObjectsByType<Light>(FindObjectsSortMode.None))
             {
@@ -56,8 +69,6 @@ namespace HouseFlip.Events
                 _houseLights.Add(light);
                 _originalIntensities.Add(light.intensity);
             }
-
-            _cached = true;
         }
 
         protected override void OnServerBegin()
@@ -90,11 +101,65 @@ namespace HouseFlip.Events
 
         protected override void ApplyActiveState(bool active)
         {
-            CacheLighting();
+            CacheAmbient();
+
+            // Intensities are only meaningful while the scene is still at full brightness;
+            // re-sampling part-way through a fade would bake the dimmed values in as the
+            // originals and the lights could never be brought back up.
+            if (active && _blend <= 0f)
+            {
+                CaptureLights();
+            }
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            base.OnNetworkDespawn();
+            RestoreLighting();
+        }
+
+        public override void OnDestroy()
+        {
+            RestoreLighting();
+            base.OnDestroy();
+        }
+
+        /// <summary>
+        /// RenderSettings is global and outlives this component, and the fade in
+        /// <see cref="Update"/> is the only thing that ever walks it back. Losing the
+        /// handler mid-outage — session shutdown, disconnect, scene teardown — would
+        /// otherwise strand the scene at blackout values for good, and a later instance
+        /// would then cache those blacked-out values as its "originals".
+        /// </summary>
+        private void RestoreLighting()
+        {
+            if (!_ambientCached || _blend <= 0f)
+            {
+                return;
+            }
+
+            _blend = 0f;
+            RenderSettings.ambientLight = _originalAmbient;
+            RenderSettings.ambientIntensity = _originalAmbientIntensity;
+
+            for (int i = 0; i < _houseLights.Count; i++)
+            {
+                if (_houseLights[i] != null)
+                {
+                    _houseLights[i].intensity = _originalIntensities[i];
+                }
+            }
         }
 
         private void Update()
         {
+            // A despawned handler keeps returning the last replicated IsActive, so without
+            // this check the fade would hold the scene dark after the session has ended.
+            if (!IsSpawned)
+            {
+                return;
+            }
+
             // Runs on every peer: IsActive is replicated, so the fade is identical for all.
             float target = IsActive ? 1f : 0f;
             if (Mathf.Approximately(_blend, target))
@@ -102,7 +167,7 @@ namespace HouseFlip.Events
                 return;
             }
 
-            CacheLighting();
+            CacheAmbient();
             _blend = Mathf.MoveTowards(_blend, target, fadeSpeed * Time.deltaTime);
 
             RenderSettings.ambientLight = Color.Lerp(_originalAmbient, blackoutAmbient, _blend);

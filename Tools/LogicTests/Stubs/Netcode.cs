@@ -205,6 +205,10 @@ namespace Unity.Netcode
         public bool IsLocalPlayer { get; set; }
         public bool IsSpawned { get; set; }
         public ulong OwnerClientId { get; set; }
+
+        // Real NGO exposes this on NetworkBehaviour as a passthrough to the NetworkObject.
+        public ulong NetworkObjectId { get; set; }
+
         public NetworkObject NetworkObject => null;
         public NetworkManager NetworkManager => null;
 

@@ -32,6 +32,7 @@ namespace HouseFlip.Player
         private Vector3 _horizontalVelocity;
         private float _verticalVelocity;
         private Transform _cameraTransform;
+        private CharacterAnimator _animator;
 
         /// <summary>Player colour, assigned by the server on spawn so HUD and body agree.</summary>
         public readonly NetworkVariable<Color> PlayerColor = new NetworkVariable<Color>(
@@ -53,6 +54,7 @@ namespace HouseFlip.Player
             Carry = GetComponent<PlayerCarry>();
             Tools = GetComponent<PlayerToolController>();
             Stats = GetComponent<PlayerStatsTracker>();
+            _animator = GetComponent<CharacterAnimator>();
         }
 
         public override void OnNetworkSpawn()
@@ -250,6 +252,11 @@ namespace HouseFlip.Player
             _verticalVelocity = 0f;
 
             _controller.enabled = wasEnabled;
+
+            // The animator infers speed from how far the transform moved since last frame.
+            // A teleport is metres in one frame, which it would otherwise read as a sprint
+            // at several hundred m/s and play as a burst of spinning limbs on every spawn.
+            _animator?.NotifyTeleported();
         }
     }
 }

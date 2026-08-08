@@ -17,7 +17,9 @@ namespace HouseFlip.Networking
         [Tooltip("Left empty, the shared ArtPalette colours are used.")]
         [SerializeField] private Color[] playerColors;
 
-        private int _assigned;
+        /// <summary>Slot index currently held by each connected client.</summary>
+        private readonly System.Collections.Generic.Dictionary<ulong, int> _slots =
+            new System.Collections.Generic.Dictionary<ulong, int>();
 
         private void Start()
         {
@@ -28,6 +30,7 @@ namespace HouseFlip.Networking
             }
 
             manager.OnClientConnectedCallback += OnClientConnected;
+            manager.OnClientDisconnectCallback += OnClientDisconnected;
             manager.OnServerStarted += OnServerStarted;
         }
 
@@ -37,13 +40,41 @@ namespace HouseFlip.Networking
             if (manager != null)
             {
                 manager.OnClientConnectedCallback -= OnClientConnected;
+                manager.OnClientDisconnectCallback -= OnClientDisconnected;
                 manager.OnServerStarted -= OnServerStarted;
             }
         }
 
         private void OnServerStarted()
         {
-            _assigned = 0;
+            _slots.Clear();
+        }
+
+        private void OnClientDisconnected(ulong clientId)
+        {
+            // Freeing the slot is what makes it reusable. A counter that only ever went up
+            // would hand the fifth *join* of a four-player session slot 4, which wraps back
+            // onto slot 0 — the reconnecting player would come back in someone else's colour
+            // and land on top of them at their spawn point.
+            _slots.Remove(clientId);
+        }
+
+        /// <summary>Lowest slot index nobody currently occupies.</summary>
+        private int TakeSlot(ulong clientId)
+        {
+            if (_slots.TryGetValue(clientId, out int existing))
+            {
+                return existing;
+            }
+
+            int slot = 0;
+            while (_slots.ContainsValue(slot))
+            {
+                slot++;
+            }
+
+            _slots[clientId] = slot;
+            return slot;
         }
 
         private void OnClientConnected(ulong clientId)
@@ -60,7 +91,7 @@ namespace HouseFlip.Networking
                 return;
             }
 
-            int slot = _assigned++;
+            int slot = TakeSlot(clientId);
 
             // Fall back to the palette so the four players are always distinguishable
             // even if nobody filled the inspector array in.

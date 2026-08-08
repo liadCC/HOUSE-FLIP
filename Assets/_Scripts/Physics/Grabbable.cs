@@ -71,6 +71,20 @@ namespace HouseFlip.PhysicsGrab
 
         public override void OnNetworkDespawn()
         {
+            // A carrier only remembers this object's NetworkObjectId. Once the object is
+            // gone that id resolves to null forever, so the holder stays flagged as
+            // carrying something they can no longer see, drop or replace — hand them back
+            // empty hands before the id goes stale. Reachable whenever the object dies out
+            // from under a carrier: a co-carrier selling a sofa back while the other player
+            // is still holding it, or the thing being smashed mid-haul.
+            if (IsServer && _carriers != null)
+            {
+                for (int i = 0; i < _carriers.Count; i++)
+                {
+                    PlayerRegistry.Get(_carriers[i])?.Carry?.ServerNotifyHeldDespawned(NetworkObjectId);
+                }
+            }
+
             if (_carriers != null)
             {
                 _carriers.OnListChanged -= OnCarriersChanged;
@@ -259,8 +273,14 @@ namespace HouseFlip.PhysicsGrab
                 _rigidbody.angularVelocity = Vector3.zero;
                 SetLayerRecursive(GameLayers.Carried);
             }
-            else if (!IsHeld)
+            else
             {
+                // Not just "nobody is holding it". A heavy object dropped back to a single
+                // carrier is no longer moved by FixedUpdate, and leaving it on the Carried
+                // layer takes it out of the interaction raycast mask — so nobody could ever
+                // walk up and take the second handle, and it would hang in mid-air with
+                // gravity still switched off. Anything short of a full crew goes back to
+                // being an ordinary physics object that a second player can see and grab.
                 RestorePhysics();
             }
         }

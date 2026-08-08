@@ -223,14 +223,19 @@ namespace HouseFlip.UI
             if (inLobby)
             {
                 // Coming back from the results screen: the menu needs the cursor again.
+                // This is the only state in which clearing the end-of-round screens is safe.
                 InspectionScreenUI.Hide();
                 AwardsScreenUI.Hide();
                 PlayerCameraRig.SetCursorLocked(false);
             }
             else
             {
-                InspectionScreenUI.Hide();
-                AwardsScreenUI.Hide();
+                // Deliberately no Hide() calls here. Entering Inspection/Results is announced
+                // by a NetworkVariable delta while the screen itself is opened by a ClientRpc,
+                // and on a remote client those two messages are not ordered — if the RPC lands
+                // first, hiding here would wipe the screen that was just shown and leave that
+                // player with no way to advance the round. Only Lobby entry needs the cleanup,
+                // and it always precedes the next round's screens.
 
                 // Only grab the cursor for actual play. The inspection and results
                 // screens release it again themselves.

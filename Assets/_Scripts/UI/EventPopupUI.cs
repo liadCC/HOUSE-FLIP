@@ -56,6 +56,11 @@ namespace HouseFlip.UI
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -140f), new Vector2(880f, 130f), UIFactory.Shade);
 
+            // A CanvasGroup alpha of 0 hides the banner but does not stop it raycasting, so
+            // without this the faded-out popup keeps swallowing clicks across the top of the
+            // screen for the whole round.
+            background.raycastTarget = false;
+
             titleLabel = UIFactory.CreateText(background.transform, "Title", string.Empty, 34,
                 TextAnchor.UpperCenter,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f),

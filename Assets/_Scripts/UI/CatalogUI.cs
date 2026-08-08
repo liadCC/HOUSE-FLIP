@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using HouseFlip.Building;
 using HouseFlip.Core;
 using HouseFlip.Furniture;
+using HouseFlip.GameFlow;
 using HouseFlip.Networking;
 using HouseFlip.Painting;
 using HouseFlip.Player;
@@ -30,6 +31,7 @@ namespace HouseFlip.UI
         private readonly List<GameObject> _entries = new List<GameObject>();
         private CatalogKind _kind = CatalogKind.Furniture;
         private bool _paintMode;
+        private GameState _state = GameState.Lobby;
 
         private bool IsOpen => _root != null && _root.activeSelf;
 
@@ -41,6 +43,28 @@ namespace HouseFlip.UI
             }
 
             _root.SetActive(false);
+        }
+
+        private void OnEnable()
+        {
+            GameEvents.GameStateChanged += OnGameStateChanged;
+        }
+
+        private void OnDisable()
+        {
+            GameEvents.GameStateChanged -= OnGameStateChanged;
+        }
+
+        private void OnGameStateChanged(GameState state)
+        {
+            _state = state;
+
+            // Close in the same frame the round ends rather than waiting for Update, so the
+            // shop cannot be drawn over the inspection screen that is about to appear.
+            if (_state != GameState.Renovating && IsOpen)
+            {
+                Close();
+            }
         }
 
         private void Build()
@@ -74,7 +98,11 @@ namespace HouseFlip.UI
 
         private void Update()
         {
-            if (!PlayerController.InputEnabled)
+            // Gate on the session state, not PlayerController.InputEnabled: that flag is
+            // deliberately true again in the lobby (ResetInputGate), so keying it would let
+            // the shop open on top of the lobby menu — and closing it there re-grabs the
+            // cursor, leaving HOST GAME unclickable with nothing left to release it.
+            if (_state != GameState.Renovating)
             {
                 if (IsOpen)
                 {
@@ -119,6 +147,11 @@ namespace HouseFlip.UI
         {
             ResolveCatalog();
 
+            // Drop any ghost first. PlacementController reads the raw mouse button and knows
+            // nothing about uGUI, so with the cursor freed the very click that picks the next
+            // item would also confirm — and pay for — the item already being placed.
+            CancelLocalPlacement();
+
             _root.SetActive(true);
             PlayerCameraRig.SetCursorLocked(false);
 
@@ -135,7 +168,26 @@ namespace HouseFlip.UI
         private void Close()
         {
             _root.SetActive(false);
-            PlayerCameraRig.SetCursorLocked(true);
+
+            // Only hand the cursor back to the camera while a round is actually running.
+            // Closing because the timer hit zero would otherwise lock the cursor the instant
+            // the inspection screen opens, so SELL THE HOUSE could never be clicked and
+            // nothing would ever release the cursor again.
+            if (_state == GameState.Renovating)
+            {
+                PlayerCameraRig.SetCursorLocked(true);
+            }
+        }
+
+        private static void CancelLocalPlacement()
+        {
+            PlayerController local = PlayerRegistry.LocalPlayer;
+            PlacementController placer = local != null ? local.GetComponent<PlacementController>() : null;
+
+            if (placer != null && placer.IsPlacing)
+            {
+                placer.Cancel();
+            }
         }
 
         private void ResolveCatalog()
@@ -250,17 +302,19 @@ namespace HouseFlip.UI
         private void SelectPaint(int colorIndex)
         {
             PlayerController local = PlayerRegistry.LocalPlayer;
-            if (local == null || local.Tools == null)
-            {
-                return;
-            }
 
-            local.Tools.SetPaintColorIndex(colorIndex);
-
-            // Picking a colour implies you want the roller in your hand.
-            if (local.Tools.CurrentTool != ToolType.PaintRoller)
+            // Close on every path, exactly like Select does. Bailing out early left the panel
+            // open with the cursor free whenever the local player had not spawned yet, and
+            // the player had no way to tell the click had been swallowed.
+            if (local != null && local.Tools != null)
             {
-                local.Tools.Equip(ToolType.PaintRoller);
+                local.Tools.SetPaintColorIndex(colorIndex);
+
+                // Picking a colour implies you want the roller in your hand.
+                if (local.Tools.CurrentTool != ToolType.PaintRoller)
+                {
+                    local.Tools.Equip(ToolType.PaintRoller);
+                }
             }
 
             Close();

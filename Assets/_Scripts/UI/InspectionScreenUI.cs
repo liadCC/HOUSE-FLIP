@@ -61,9 +61,11 @@ namespace HouseFlip.UI
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(420f, -160f), new Vector2(640f, 640f));
 
+            // 600 sat inside the body block: 16 lines of 30pt text reach ~700px below the
+            // canvas top, so the profit line was drawn straight over TOTAL INVESTMENT.
             profitLabel = UIFactory.CreateText(root.transform, "Profit", string.Empty, 44, TextAnchor.UpperLeft,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(-460f, -600f), new Vector2(720f, 80f));
+                new Vector2(-460f, -740f), new Vector2(720f, 80f));
 
             UIFactory.CreateButton(root.transform, "SELL THE HOUSE",
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
@@ -78,7 +80,17 @@ namespace HouseFlip.UI
                 _instance = FindFirstObjectByType<InspectionScreenUI>();
             }
 
-            _instance?.Display(report, roomScores);
+            if (_instance == null)
+            {
+                return;
+            }
+
+            // Both end-of-round screens are full-screen panels on Screens_Canvas and the
+            // awards panel is created later, so it is the later sibling and would draw on
+            // top of this one if a previous round had left it active.
+            AwardsScreenUI.Hide();
+
+            _instance.Display(report, roomScores);
         }
 
         public static void Hide()
@@ -119,15 +131,15 @@ namespace HouseFlip.UI
 
             if (roomScores != null)
             {
+                // One row per room, not seven. The house has six scored rooms (GDD 17), and at
+                // seven lines each the block ran ~1100px from a start 160px down a 1080px
+                // canvas — the last rooms were drawn off the bottom of the screen entirely.
                 foreach (RoomScore score in roomScores)
                 {
-                    _builder.AppendLine(score.RoomName.ToString().ToUpperInvariant());
-                    _builder.AppendLine($"  Cleanliness: {score.Cleanliness,5:0}");
-                    _builder.AppendLine($"  Furniture:   {score.Furniture,5:0}");
-                    _builder.AppendLine($"  Design:      {score.Design,5:0}");
-                    _builder.AppendLine($"  Condition:   {score.Condition,5:0}");
-                    _builder.AppendLine($"  ─────────────────");
-                    _builder.AppendLine($"  ROOM SCORE:  {score.Total,5:0}");
+                    _builder.AppendLine($"{score.RoomName.ToString().ToUpperInvariant(),-14}{score.Total,5:0}");
+                    _builder.AppendLine(
+                        $"   Clean {score.Cleanliness,3:0}   Furn {score.Furniture,3:0}" +
+                        $"   Design {score.Design,3:0}   Cond {score.Condition,3:0}");
                     _builder.AppendLine();
                 }
             }

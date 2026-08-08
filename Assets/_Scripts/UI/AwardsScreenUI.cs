@@ -76,8 +76,17 @@ namespace HouseFlip.UI
                 _instance = FindFirstObjectByType<AwardsScreenUI>();
             }
 
+            if (_instance == null)
+            {
+                return;
+            }
+
+            // Take the inspection screen down only once we know something replaces it —
+            // hiding first meant a missing instance left the player looking at the bare game
+            // world with no button to advance the round.
             InspectionScreenUI.Hide();
-            _instance?.Display(report, awards);
+
+            _instance.Display(report, awards);
         }
 
         public static void Hide()
