@@ -126,21 +126,27 @@ namespace HouseFlip.Economy
 
             if (_initialDirt <= 0.001f)
             {
+                // A room with nothing to clean starts spotless, but an unresolved water
+                // leak can still have left a permanent penalty on it (GDD 21).
                 Cleanliness.Value = Mathf.Clamp01(1f - CleanlinessPenalty.Value);
-                return;
             }
-
-            float remaining = 0f;
-            foreach (DirtSource dirt in _dirt)
+            else
             {
-                if (dirt != null)
+                float remaining = 0f;
+                foreach (DirtSource dirt in _dirt)
                 {
-                    remaining += dirt.RemainingDirt;
+                    if (dirt != null)
+                    {
+                        remaining += dirt.RemainingDirt;
+                    }
                 }
+
+                float clean = 1f - (remaining / _initialDirt);
+                Cleanliness.Value = Mathf.Clamp01(clean - CleanlinessPenalty.Value);
             }
 
-            float clean = 1f - (remaining / _initialDirt);
-            Cleanliness.Value = Mathf.Clamp01(clean - CleanlinessPenalty.Value);
+            // Raised on both paths: the early return used to skip it, so flood damage to
+            // a room with no dirt piles never reached the house value.
             GameEvents.RaiseHouseStateDirty();
         }
 

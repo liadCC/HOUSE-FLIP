@@ -55,15 +55,35 @@ substitute for opening the project and playing it.
 
 ## What the tests assert
 
-The GDD gives exact formulas and worked examples; the tests check the implementation
-reproduces them.
+71 tests. The GDD gives exact formulas and worked examples; the tests check the
+implementation reproduces them.
 
-- **Economy** — the room score formula and its worked example from GDD §17, the
+- **Economy values** — the room score formula and its worked example from GDD §17, the
   inspection breakdown from §19, the profit calculation from §19, and the loss from the
   chaos scenario in §28. Plus the invariant that the four room-score weights sum to 1,
   which is what makes a perfect room score exactly 100.
+- **Economy systems** — the live `BudgetManager`, `RoomController` and
+  `HouseValueManager` with `IsServer` forced on. Covers the GDD §15 rule that purchases
+  are blocked rather than overdrawn (including the exact-budget boundary), that spending
+  is split into the renovation and furniture lines §19 prints separately, that a room
+  derives its four sub-scores correctly, and that only the server can move shared state
+  (GDD §22).
 - **Awards** — the GDD §20 table, and the two properties the screen depends on: every
   player receives exactly one award, and no award is handed out twice. Also that
   client-supplied names and huge stat values can't overflow the `FixedString` fields.
 - **Placement and paint** — grid snapping (including that it's idempotent, so a held
   ghost doesn't drift), the seven-colour palette, harmony rules, and carry weights.
+
+### These tests have teeth
+
+A suite that passes because it never reaches the code is worse than none. Three
+deliberate mutations were introduced and every one was caught:
+
+| Mutation | Tests failed |
+|---|---|
+| Room score weight `0.30` → `0.35` | 2 |
+| Budget check `<` → `<=` (off-by-one on an exact-budget purchase) | 2 |
+| Grid snap footprint offset dropped | 1 |
+
+Worth repeating after adding tests, since it is the only way to tell a real assertion
+from a vacuous one.

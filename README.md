@@ -154,7 +154,7 @@ There is no Unity installation in the environment this was written in, so the co
 verified as far as it can be short of running the game. See [`Tools/`](Tools/README.md).
 
 ```bash
-dotnet test Tools/LogicTests          # 43 tests + player-build type-check
+dotnet test Tools/LogicTests          # 71 tests + player-build type-check
 dotnet build Tools/EditorCompileCheck # editor-configuration type-check
 ```
 
@@ -162,10 +162,11 @@ dotnet build Tools/EditorCompileCheck # editor-configuration type-check
    UnityEditor surfaces, in both configurations Unity itself builds — editor
    (`UNITY_EDITOR` defined, all scripts) and player (Editor scripts excluded). Both
    clean, zero errors and zero warnings.
-2. **Tested** — 43 NUnit tests running the real sources, asserting the economy formulas
-   reproduce the worked examples printed in GDD §17, §19 and §28, that the awards
-   allocation satisfies its one-each/no-duplicates properties, and that grid snapping is
-   idempotent.
+2. **Tested** — 71 NUnit tests running the real sources, asserting the economy formulas
+   reproduce the worked examples printed in GDD §17, §19 and §28, that the shared budget
+   refuses to overdraw, that the awards allocation satisfies its one-each/no-duplicates
+   properties, and that grid snapping is idempotent. The suite was mutation-checked:
+   three deliberately introduced bugs were all caught.
 3. **Executed** for the audio path, which has no Unity dependency: all 17 clips
    generated, header-validated, level-checked. (This found a real bug — the de-click fade
    was erasing the attack transient of percussive sounds.)

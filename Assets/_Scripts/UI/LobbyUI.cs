@@ -33,6 +33,11 @@ namespace HouseFlip.UI
 
         private void OnEnable()
         {
+            // The lobby owns the cursor until a round starts. Nothing has raised a state
+            // change yet at this point — GameManager has not spawned — so this cannot be
+            // left to OnGameStateChanged.
+            PlayerCameraRig.SetCursorLocked(false);
+
             GameEvents.GameStateChanged += OnGameStateChanged;
 
             if (NetworkBootstrap.Exists)
@@ -215,11 +220,21 @@ namespace HouseFlip.UI
             bool inLobby = state == GameState.Lobby;
             root.SetActive(inLobby);
 
-            if (!inLobby)
+            if (inLobby)
+            {
+                // Coming back from the results screen: the menu needs the cursor again.
+                InspectionScreenUI.Hide();
+                AwardsScreenUI.Hide();
+                PlayerCameraRig.SetCursorLocked(false);
+            }
+            else
             {
                 InspectionScreenUI.Hide();
                 AwardsScreenUI.Hide();
-                PlayerCameraRig.SetCursorLocked(true);
+
+                // Only grab the cursor for actual play. The inspection and results
+                // screens release it again themselves.
+                PlayerCameraRig.SetCursorLocked(state == GameState.Renovating);
             }
         }
 

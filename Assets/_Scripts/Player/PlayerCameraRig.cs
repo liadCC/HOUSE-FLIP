@@ -56,10 +56,10 @@ namespace HouseFlip.Player
             }
         }
 
-        private void OnEnable()
-        {
-            SetCursorLocked(true);
-        }
+        // Deliberately no cursor handling on enable. The rig exists from the moment the
+        // scene loads, but the lobby is showing then — grabbing the cursor here would
+        // make the menu's own buttons unclickable. Cursor state follows the game state
+        // instead, driven by LobbyUI and the end-of-round screens.
 
         private void OnDisable()
         {

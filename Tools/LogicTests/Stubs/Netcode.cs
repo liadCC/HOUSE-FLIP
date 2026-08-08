@@ -50,16 +50,38 @@ namespace Unity.Netcode
 
     public abstract class NetworkVariableBase { }
 
+    /// <summary>
+    /// Functional value holder. Matches Netcode's behaviour of only raising
+    /// OnValueChanged when the value actually differs, so tests of change notification
+    /// behave the way they will in the editor.
+    /// </summary>
     public class NetworkVariable<T> : NetworkVariableBase
     {
         public delegate void OnValueChangedDelegate(T previousValue, T newValue);
 
-        public NetworkVariable() { }
-        public NetworkVariable(T value) { Value = value; }
-        public NetworkVariable(T value, NetworkVariableReadPermission read, NetworkVariableWritePermission write)
-        { Value = value; }
+        private T _value;
 
-        public T Value { get; set; }
+        public NetworkVariable() { }
+        public NetworkVariable(T value) { _value = value; }
+        public NetworkVariable(T value, NetworkVariableReadPermission read, NetworkVariableWritePermission write)
+        { _value = value; }
+
+        public T Value
+        {
+            get => _value;
+            set
+            {
+                if (EqualityComparer<T>.Default.Equals(_value, value))
+                {
+                    return;
+                }
+
+                T previous = _value;
+                _value = value;
+                OnValueChanged?.Invoke(previous, value);
+            }
+        }
+
         public event OnValueChangedDelegate OnValueChanged;
     }
 
@@ -71,18 +93,65 @@ namespace Unity.Netcode
         public int Index;
     }
 
+    /// <summary>Functional list, so carrier bookkeeping can be exercised in tests.</summary>
     public class NetworkList<T> : NetworkVariableBase where T : unmanaged, IEquatable<T>
     {
         public delegate void OnListChangedDelegate(NetworkListEvent<T> changeEvent);
 
+        private readonly List<T> _items = new List<T>();
+
         public NetworkList() { }
-        public int Count => 0;
-        public T this[int index] { get => default; set { } }
-        public void Add(T item) { }
-        public void RemoveAt(int index) { }
-        public bool Remove(T item) => false;
-        public bool Contains(T item) => false;
-        public void Clear() { }
+
+        public int Count => _items.Count;
+
+        public T this[int index]
+        {
+            get => _items[index];
+            set
+            {
+                _items[index] = value;
+                Raise(NetworkListEvent<T>.EventType.Value, value, index);
+            }
+        }
+
+        public void Add(T item)
+        {
+            _items.Add(item);
+            Raise(NetworkListEvent<T>.EventType.Add, item, _items.Count - 1);
+        }
+
+        public void RemoveAt(int index)
+        {
+            T item = _items[index];
+            _items.RemoveAt(index);
+            Raise(NetworkListEvent<T>.EventType.RemoveAt, item, index);
+        }
+
+        public bool Remove(T item)
+        {
+            int index = _items.IndexOf(item);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            RemoveAt(index);
+            return true;
+        }
+
+        public bool Contains(T item) => _items.Contains(item);
+
+        public void Clear()
+        {
+            _items.Clear();
+            Raise(NetworkListEvent<T>.EventType.Clear, default, -1);
+        }
+
+        private void Raise(NetworkListEvent<T>.EventType type, T value, int index)
+        {
+            OnListChanged?.Invoke(new NetworkListEvent<T> { Type = type, Value = value, Index = index });
+        }
+
         public event OnListChangedDelegate OnListChanged;
     }
 
@@ -126,13 +195,16 @@ namespace Unity.Netcode
 
     public abstract class NetworkBehaviour : UnityEngine.MonoBehaviour
     {
-        public bool IsServer => false;
-        public bool IsClient => false;
-        public bool IsHost => false;
-        public bool IsOwner => false;
-        public bool IsLocalPlayer => false;
-        public bool IsSpawned => false;
-        public ulong OwnerClientId => 0;
+        // These are read-only in the real API. They are settable here purely so a test
+        // can put an object into "I am the server" state, which is the precondition for
+        // most of the authoritative logic worth testing.
+        public bool IsServer { get; set; }
+        public bool IsClient { get; set; }
+        public bool IsHost { get; set; }
+        public bool IsOwner { get; set; }
+        public bool IsLocalPlayer { get; set; }
+        public bool IsSpawned { get; set; }
+        public ulong OwnerClientId { get; set; }
         public NetworkObject NetworkObject => null;
         public NetworkManager NetworkManager => null;
 
