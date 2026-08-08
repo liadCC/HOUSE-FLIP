@@ -60,7 +60,8 @@ namespace HouseFlip.Networking
                 return;
             }
 
-            if (!ValidateActor(sender, destructible.transform.position, ToolType.Hammer, out PlayerController _))
+            if (!ValidateActor(sender, destructible.transform.position, ToolType.Hammer,
+                    out PlayerController swinger))
             {
                 return;
             }
@@ -70,6 +71,7 @@ namespace HouseFlip.Networking
                 return;
             }
 
+            swinger.Tools?.ServerNotifyToolUsed();
             destructible.ServerApplyHit(sender);
         }
 
@@ -167,11 +169,13 @@ namespace HouseFlip.Networking
                 return;
             }
 
-            if (!ValidateActor(sender, wall.transform.position, ToolType.PaintRoller, out PlayerController _))
+            if (!ValidateActor(sender, wall.transform.position, ToolType.PaintRoller,
+                    out PlayerController painter))
             {
                 return;
             }
 
+            painter.Tools?.ServerNotifyToolUsed();
             wall.ServerPaint(sender, colorIndex);
         }
 

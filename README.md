@@ -118,6 +118,9 @@ All 18 phases of the development order (GDD §5) are implemented.
 | HUD | Implemented |
 | Audio | Implemented — all 11 GDD §24 triggers, synthesised placeholder clips |
 | Polish (Phase 18) | Implemented — shake, debris, hit flash, HUD punch |
+| Art | Toon shader, gradient sky, chamfered meshes, one palette |
+| Animation | Procedural walk, carry, land, tool swing |
+| Balance | Tuned against a solvable model — see below |
 
 ### Audio
 
@@ -139,14 +142,39 @@ over the generated file: the manager looks clips up by id, never by filename.
 - **Hit flash** and **scale punch** on impacts, placements and changing HUD numbers.
   The house value label tints green or red by direction of change.
 
+### Art
+
+- **Toon shader** (`Assets/_Art/Shaders/Toon.shader`) — lighting quantised into bands
+  rather than a smooth ramp, with shadows tinted cool instead of merely darkened, plus a
+  rim light so silhouettes stay legible in small rooms. Falls back to Standard if it
+  fails to compile, rather than turning the house magenta.
+- **Gradient skybox**, distance fog, warm key light against cool ambient. That warm/cool
+  contrast is what gives untextured geometry depth.
+- **Chamfered geometry** (`Art/MeshFactory`) — props are generated meshes with bevelled
+  edges, not Unity cubes. 44 triangles, and the bevel catches a highlight all the way
+  round, which is most of what separates stylised low-poly from "box".
+- **One palette** (`Art/ArtPalette`) — every colour in the game comes from it.
+
+### Animation
+
+Procedural, no Animator and no rig. For blocky characters this beats a thin blend tree:
+it responds to real speed, never foot-slides, and squash-on-landing costs three lines.
+
+Everything is derived from **observed motion** — how far the transform actually moved —
+rather than from input. That is what makes remote players animate correctly: their
+transforms arrive over the network with no input attached, and they walk, swing and land
+exactly like the local one.
+
+Walk cycle with counter-swinging arms, body bob and lean, idle breathing, volume-preserving
+squash on landing, a two-handed carry pose, and an asymmetric tool swing (fast down-stroke,
+slower recovery) triggered by hammer blows and paint strokes.
+
 ### What is still missing
 
-- **Art.** Everything is coloured primitives. The prefabs are structured so a mesh swap
-  is all that's needed — no gameplay data lives in the models.
-- **Animation.** No locomotion blend tree; characters slide. GDD §6 calls this
-  sufficient for MVP.
-- **Tuning.** The balance numbers in `GameConstants` are a first pass, not playtested
-  values.
+- **Meshes are still generated boxes.** Chamfered and well lit, but a sofa is a box. The
+  prefabs are structured so a mesh swap is all that's needed.
+- **No facial animation or hand IK.** The character has a snout so you can tell which way
+  it faces; that is the extent of the expression.
 
 ### Verification status
 
@@ -154,7 +182,7 @@ There is no Unity installation in the environment this was written in, so the co
 verified as far as it can be short of running the game. See [`Tools/`](Tools/README.md).
 
 ```bash
-dotnet test Tools/LogicTests          # 71 tests + player-build type-check
+dotnet test Tools/LogicTests          # 99 tests + player-build type-check
 dotnet build Tools/EditorCompileCheck # editor-configuration type-check
 ```
 
@@ -162,7 +190,7 @@ dotnet build Tools/EditorCompileCheck # editor-configuration type-check
    UnityEditor surfaces, in both configurations Unity itself builds — editor
    (`UNITY_EDITOR` defined, all scripts) and player (Editor scripts excluded). Both
    clean, zero errors and zero warnings.
-2. **Tested** — 71 NUnit tests running the real sources, asserting the economy formulas
+2. **Tested** — 99 NUnit tests running the real sources, asserting the economy formulas
    reproduce the worked examples printed in GDD §17, §19 and §28, that the shared budget
    refuses to overdraw, that the awards allocation satisfies its one-each/no-duplicates
    properties, and that grid snapping is idempotent. The suite was mutation-checked:
@@ -174,6 +202,31 @@ dotnet build Tools/EditorCompileCheck # editor-configuration type-check
 What none of that covers: Netcode's RPC source generators, Unity's analyzers, and
 anything about runtime behaviour, physics, rendering or networking. **Nothing here has
 been played.** Expect to fix some things on first open.
+
+## Balance
+
+The economy is tuned against a solvable model (`Assets/_Scripts/Balance/`) rather than by
+guesswork. `HouseDefinition` and `CatalogDefinition` hold the layout and catalog as plain
+data; the scene generator builds from them and `BalanceModel` reads the same tables, so
+the model cannot drift from the game. It solves the shopping decision as a knapsack under
+the budget.
+
+| Round | Profit |
+|---|---|
+| Untouched | −$25,200 |
+| Shop hard, skip the work | −$24,622 |
+| Clean only | −$7,200 |
+| Clean + repair, no shopping | +$14,130 |
+| Best play | +$21,998 |
+
+Repairs are the pivot from loss to profit, so a first round teaches the right lesson.
+The full shopping list costs $23,935 against a $20,000 budget, which is what makes the
+catalog a decision rather than a checklist.
+
+**Known shortfall:** four players finish this house in about four minutes of a
+25-minute round. The content is thin for a full team. The honest fixes are a shorter
+round or a bigger house — both design calls, so a test records the fact rather than
+hiding it. `TimerManager.sessionSeconds` is serialized if you want to try ~10 minutes.
 
 ## Post-MVP
 

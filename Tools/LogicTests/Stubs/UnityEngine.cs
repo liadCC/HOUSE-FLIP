@@ -80,6 +80,11 @@ namespace UnityEngine
         public static float Distance(Vector3 a, Vector3 b) => (a - b).magnitude;
         public static float Dot(Vector3 a, Vector3 b) => a.x * b.x + a.y * b.y + a.z * b.z;
 
+        public static Vector3 Cross(Vector3 a, Vector3 b) => new Vector3(
+            a.y * b.z - a.z * b.y,
+            a.z * b.x - a.x * b.z,
+            a.x * b.y - a.y * b.x);
+
         public static Vector3 Lerp(Vector3 a, Vector3 b, float t)
         {
             t = Mathf.Clamp01(t);
@@ -524,6 +529,14 @@ namespace UnityEngine
     }
 
     public class MeshRenderer : Renderer { }
+
+    public class MeshFilter : Component
+    {
+        public Mesh mesh { get; set; }
+        public Mesh sharedMesh { get; set; }
+    }
+
+    public class Skybox : Behaviour { public Material material { get; set; } }
     public class SkinnedMeshRenderer : Renderer { }
 
     public class Material : Object
@@ -550,7 +563,36 @@ namespace UnityEngine
         public void SetFloat(string n, float f) { }
     }
 
-    public class Mesh : Object { }
+    /// <summary>Functional enough to validate generated geometry in tests.</summary>
+    public class Mesh : Object
+    {
+        public Vector3[] vertices { get; set; } = new Vector3[0];
+        public Vector3[] normals { get; set; } = new Vector3[0];
+        public int[] triangles { get; set; } = new int[0];
+        public Vector2[] uv { get; set; } = new Vector2[0];
+        public Bounds bounds { get; private set; }
+
+        public int vertexCount => vertices.Length;
+        public void Clear() { vertices = new Vector3[0]; normals = new Vector3[0]; triangles = new int[0]; }
+
+        public void RecalculateBounds()
+        {
+            if (vertices.Length == 0) { bounds = new Bounds(Vector3.zero, Vector3.zero); return; }
+
+            Vector3 min = vertices[0], max = vertices[0];
+            foreach (Vector3 v in vertices)
+            {
+                min = new Vector3(Math.Min(min.x, v.x), Math.Min(min.y, v.y), Math.Min(min.z, v.z));
+                max = new Vector3(Math.Max(max.x, v.x), Math.Max(max.y, v.y), Math.Max(max.z, v.z));
+            }
+
+            Vector3 size = max - min;
+            Vector3 centre = (min + max) * 0.5f;
+            bounds = new Bounds(centre, size) { min = min, max = max, extents = size * 0.5f };
+        }
+
+        public void RecalculateNormals() { }
+    }
     public class Sprite : Object { }
     public class Font : Object { }
 
@@ -563,6 +605,7 @@ namespace UnityEngine
     }
 
     public enum LightType { Spot, Directional, Point, Area, Rectangle, Disc }
+    public enum FogMode { Linear = 1, Exponential = 2, ExponentialSquared = 3 }
     public enum LightShadows { None, Hard, Soft }
 
     public static class RenderSettings
@@ -573,6 +616,13 @@ namespace UnityEngine
         public static Color ambientEquatorColor { get; set; }
         public static Color ambientGroundColor { get; set; }
         public static Rendering.AmbientMode ambientMode { get; set; }
+        public static Material skybox { get; set; }
+        public static bool fog { get; set; }
+        public static Color fogColor { get; set; }
+        public static FogMode fogMode { get; set; }
+        public static float fogStartDistance { get; set; }
+        public static float fogEndDistance { get; set; }
+        public static float fogDensity { get; set; }
     }
 
     public class Camera : Behaviour

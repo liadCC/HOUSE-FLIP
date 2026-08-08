@@ -14,14 +14,8 @@ namespace HouseFlip.Networking
     {
         [SerializeField] private Transform[] spawnPoints;
 
-        [SerializeField]
-        private Color[] playerColors =
-        {
-            new Color(0.95f, 0.35f, 0.30f),
-            new Color(0.32f, 0.62f, 0.95f),
-            new Color(0.40f, 0.85f, 0.45f),
-            new Color(0.98f, 0.80f, 0.30f)
-        };
+        [Tooltip("Left empty, the shared ArtPalette colours are used.")]
+        [SerializeField] private Color[] playerColors;
 
         private int _assigned;
 
@@ -68,10 +62,16 @@ namespace HouseFlip.Networking
 
             int slot = _assigned++;
 
+            // Fall back to the palette so the four players are always distinguishable
+            // even if nobody filled the inspector array in.
+            Color[] colors = playerColors != null && playerColors.Length > 0
+                ? playerColors
+                : Art.ArtPalette.PlayerColors;
+
             var controller = playerObject.GetComponent<PlayerController>();
-            if (controller != null && playerColors.Length > 0)
+            if (controller != null && colors.Length > 0)
             {
-                controller.PlayerColor.Value = playerColors[slot % playerColors.Length];
+                controller.PlayerColor.Value = colors[slot % colors.Length];
             }
 
             var stats = playerObject.GetComponent<PlayerStatsTracker>();

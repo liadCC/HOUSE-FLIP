@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using HouseFlip.Art;
 using HouseFlip.Balance;
 using HouseFlip.Building;
 using HouseFlip.Core;
@@ -74,13 +75,18 @@ namespace HouseFlip.EditorTools
                 return existing;
             }
 
-            Shader shader = Shader.Find("Standard") ?? Shader.Find("Diffuse");
-            var material = new Material(shader) { color = color };
+            var material = new Material(ToonShader()) { color = color };
 
-            // Flat, low-spec look to match the cartoon target in GDD 1.
-            if (material.HasProperty("_Glossiness"))
+            if (material.HasProperty("_ShadowTint"))
             {
-                material.SetFloat("_Glossiness", 0.08f);
+                material.SetColor("_ShadowTint", ArtPalette.ShadowTint);
+                material.SetColor("_RimColor", ArtPalette.RimLight);
+                material.SetFloat("_Steps", 3f);
+            }
+            else if (material.HasProperty("_Glossiness"))
+            {
+                // Standard fallback: kill the specular so it still reads flat.
+                material.SetFloat("_Glossiness", 0.05f);
             }
 
             if (emissive && material.HasProperty("_EmissionColor"))
@@ -93,23 +99,50 @@ namespace HouseFlip.EditorTools
             return material;
         }
 
+        /// <summary>
+        /// The cartoon shader, or Standard if it failed to compile. Falling back matters:
+        /// a missing shader renders every surface magenta, which looks like the project is
+        /// broken rather than like one shader needs attention.
+        /// </summary>
+        public static Shader ToonShader()
+        {
+            Shader toon = Shader.Find("HouseFlip/Toon");
+            if (toon != null)
+            {
+                return toon;
+            }
+
+            Debug.LogWarning("[House Flip] HouseFlip/Toon not found — falling back to Standard.");
+            return Shader.Find("Standard") ?? Shader.Find("Diffuse");
+        }
+
         // ------------------------------------------------------------------
         // Primitive helpers
         // ------------------------------------------------------------------
 
-        /// <summary>A coloured box with its pivot on the floor, which is what every placement assumes.</summary>
+        /// <summary>
+        /// A chamfered box with its pivot on the floor, which is what every placement
+        /// assumes. Uses generated geometry rather than the cube primitive so edges catch
+        /// light (GDD 1) — see Art/MeshFactory for why that matters so much.
+        /// </summary>
         public static GameObject CreateBox(string name, Vector3 size, Material material, Transform parent = null)
         {
             var root = new GameObject(name);
 
-            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            visual.name = "Visual";
+            var visual = new GameObject("Visual", typeof(MeshFilter), typeof(MeshRenderer), typeof(BoxCollider));
             visual.transform.SetParent(root.transform, false);
-            visual.transform.localScale = size;
             visual.transform.localPosition = new Vector3(0f, size.y * 0.5f, 0f);
 
-            var renderer = visual.GetComponent<Renderer>();
-            renderer.sharedMaterial = material;
+            // Chamfer scales with the object but is capped, so a wall does not end up with
+            // a 20cm bevel and a clock does not lose its shape.
+            float chamfer = Mathf.Clamp(Mathf.Min(size.x, Mathf.Min(size.y, size.z)) * 0.12f, 0.008f, 0.06f);
+
+            Mesh mesh = MeshFactory.ChamferedBox(size, chamfer, $"Mesh_{name}");
+            visual.GetComponent<MeshFilter>().sharedMesh = mesh;
+            visual.GetComponent<MeshRenderer>().sharedMaterial = material;
+
+            var collider = visual.GetComponent<BoxCollider>();
+            collider.size = size;
 
             if (parent != null)
             {

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using HouseFlip.Art;
 using HouseFlip.Audio;
 using HouseFlip.Balance;
 using HouseFlip.Building;
@@ -108,26 +109,66 @@ namespace HouseFlip.EditorTools
 
         private static void BuildEnvironment()
         {
+            // Warm key light, cool ambient. That contrast is the whole look: flat-shaded
+            // geometry has no texture detail to carry depth, so the light has to do it.
             var lightObject = new GameObject("Sun");
             var light = lightObject.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.05f;
-            light.color = new Color(1f, 0.97f, 0.9f);
+            light.intensity = 1.15f;
+            light.color = ArtPalette.SunLight;
             light.shadows = LightShadows.Soft;
-            lightObject.transform.rotation = Quaternion.Euler(48f, -35f, 0f);
+
+            // Steep enough to light interiors through the open roof, angled enough that
+            // walls cast readable shadows rather than lying flat.
+            lightObject.transform.rotation = Quaternion.Euler(52f, -38f, 0f);
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.62f, 0.70f, 0.82f);
-            RenderSettings.ambientEquatorColor = new Color(0.48f, 0.50f, 0.54f);
-            RenderSettings.ambientGroundColor = new Color(0.30f, 0.28f, 0.26f);
+            RenderSettings.ambientSkyColor = ArtPalette.AmbientSky;
+            RenderSettings.ambientEquatorColor = ArtPalette.AmbientEquator;
+            RenderSettings.ambientGroundColor = ArtPalette.AmbientGround;
+
+            RenderSettings.skybox = BuildSkyMaterial();
+
+            // Gentle distance fog pulls the yard back and stops the flat ground plane
+            // running to a hard horizon line.
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = ArtPalette.Fog;
+            RenderSettings.fogStartDistance = 24f;
+            RenderSettings.fogEndDistance = 95f;
 
             GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             ground.transform.localScale = new Vector3(8f, 1f, 8f);
             ground.transform.position = new Vector3(0.5f, -0.02f, 2f);
             ground.GetComponent<Renderer>().sharedMaterial =
-                HouseFlipAssetBuilder.GetMaterial("Mat_Grass", new Color(0.42f, 0.62f, 0.34f));
+                HouseFlipAssetBuilder.GetMaterial("Mat_Grass", ArtPalette.Grass);
             ground.isStatic = true;
+        }
+
+        private static Material BuildSkyMaterial()
+        {
+            const string path = "Assets/_Art/Materials/Mat_Sky.mat";
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            Shader shader = Shader.Find("HouseFlip/GradientSky");
+            if (shader == null)
+            {
+                Debug.LogWarning("[House Flip] Gradient sky shader not found — leaving the default skybox.");
+                return null;
+            }
+
+            var material = new Material(shader);
+            material.SetColor("_TopColor", ArtPalette.SkyTop);
+            material.SetColor("_HorizonColor", ArtPalette.SkyHorizon);
+            material.SetColor("_BottomColor", ArtPalette.SkyBottom);
+
+            AssetDatabase.CreateAsset(material, path);
+            return material;
         }
 
         // ==================================================================
@@ -138,7 +179,7 @@ namespace HouseFlip.EditorTools
         {
             var houseRoot = new GameObject("House").transform;
 
-            Material floorMaterial = HouseFlipAssetBuilder.GetMaterial("Mat_Floor", new Color(0.68f, 0.60f, 0.50f));
+            Material floorMaterial = HouseFlipAssetBuilder.GetMaterial("Mat_Floor", ArtPalette.FloorWood);
 
             foreach (RoomDefinition room in HouseDefinition.Rooms)
             {
@@ -264,7 +305,7 @@ namespace HouseFlip.EditorTools
                 : new Vector3(fixedAxis, 0f, mid);
 
             Material material = HouseFlipAssetBuilder.GetMaterial(
-                "Mat_Wall", new Color(0.78f, 0.74f, 0.68f));
+                "Mat_Wall", ArtPalette.Plaster);
 
             GameObject wall = HouseFlipAssetBuilder.CreateBox(name, size, material, parent);
             wall.transform.position = position;
@@ -361,7 +402,7 @@ namespace HouseFlip.EditorTools
         private static void CreateDirt(string name, Vector3 position, Transform parent)
         {
             GameObject dirt = HouseFlipAssetBuilder.CreateBox(name, new Vector3(0.8f, 0.12f, 0.8f),
-                HouseFlipAssetBuilder.GetMaterial("Mat_Dirt", new Color(0.34f, 0.28f, 0.20f)), parent);
+                HouseFlipAssetBuilder.GetMaterial("Mat_Dirt", ArtPalette.Dirt), parent);
 
             dirt.transform.position = position;
             SetLayerRecursive(dirt.transform, GameLayers.Interactable);
@@ -397,7 +438,7 @@ namespace HouseFlip.EditorTools
             ToolType tool, float cost, float bonus, Transform parent)
         {
             GameObject fixture = HouseFlipAssetBuilder.CreateBox(name, new Vector3(0.45f, 0.45f, 0.45f),
-                HouseFlipAssetBuilder.GetMaterial("Mat_Broken", new Color(0.55f, 0.24f, 0.22f)), parent);
+                HouseFlipAssetBuilder.GetMaterial("Mat_Broken", ArtPalette.Broken), parent);
 
             fixture.transform.position = position;
             SetLayerRecursive(fixture.transform, GameLayers.Interactable);
@@ -409,7 +450,7 @@ namespace HouseFlip.EditorTools
             GameObject fixedVisual = Object.Instantiate(broken, fixture.transform);
             fixedVisual.name = "FixedVisual";
             fixedVisual.GetComponent<Renderer>().sharedMaterial =
-                HouseFlipAssetBuilder.GetMaterial("Mat_Fixed", new Color(0.36f, 0.72f, 0.42f));
+                HouseFlipAssetBuilder.GetMaterial("Mat_Fixed", ArtPalette.Repaired);
             fixedVisual.SetActive(false);
 
             var repairable = fixture.AddComponent<RepairableFixture>();
@@ -424,7 +465,7 @@ namespace HouseFlip.EditorTools
         private static BurstPipe CreatePipe(string name, Vector3 position, Transform parent)
         {
             GameObject pipe = HouseFlipAssetBuilder.CreateBox(name, new Vector3(0.3f, 0.9f, 0.3f),
-                HouseFlipAssetBuilder.GetMaterial("Mat_Pipe", new Color(0.58f, 0.62f, 0.68f)), parent);
+                HouseFlipAssetBuilder.GetMaterial("Mat_Pipe", ArtPalette.Pipe), parent);
 
             pipe.transform.position = position;
             SetLayerRecursive(pipe.transform, GameLayers.Interactable);
@@ -438,7 +479,7 @@ namespace HouseFlip.EditorTools
             water.transform.localScale = new Vector3(12f, 0.02f, 12f);
             water.transform.localPosition = Vector3.zero;
             water.GetComponent<Renderer>().sharedMaterial =
-                HouseFlipAssetBuilder.GetMaterial("Mat_Water", new Color(0.35f, 0.62f, 0.85f, 0.6f));
+                HouseFlipAssetBuilder.GetMaterial("Mat_Water", ArtPalette.Water);
             Object.DestroyImmediate(water.GetComponent<Collider>());
             water.layer = GameLayers.Water;
             water.SetActive(false);
@@ -452,7 +493,7 @@ namespace HouseFlip.EditorTools
         private static FuseBox CreateFuseBox(Vector3 position, Transform parent)
         {
             GameObject box = HouseFlipAssetBuilder.CreateBox("FuseBox", new Vector3(0.5f, 0.7f, 0.25f),
-                HouseFlipAssetBuilder.GetMaterial("Mat_FuseBox", new Color(0.35f, 0.35f, 0.38f)), parent);
+                HouseFlipAssetBuilder.GetMaterial("Mat_FuseBox", ArtPalette.FuseBox), parent);
 
             box.transform.position = position;
             SetLayerRecursive(box.transform, GameLayers.Interactable);
@@ -684,32 +725,36 @@ namespace HouseFlip.EditorTools
             controller.slopeLimit = 50f;
             controller.stepOffset = 0.4f;
 
+            // Slightly exaggerated proportions per GDD 6: big head, short limbs, wide
+            // torso. It reads as a cartoon character at a distance, which matters when
+            // four of them are crowded into one room.
             Material bodyMaterial = HouseFlipAssetBuilder.GetMaterial("Mat_PlayerBody", Color.white);
+            Material skinMaterial = HouseFlipAssetBuilder.GetMaterial("Mat_PlayerSkin", ArtPalette.Skin);
+            Material trimMaterial = HouseFlipAssetBuilder.GetMaterial("Mat_PlayerTrim", ArtPalette.Overalls);
 
-            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Body";
-            body.transform.SetParent(root.transform, false);
-            body.transform.localPosition = new Vector3(0f, 0.9f, 0f);
-            body.transform.localScale = new Vector3(0.62f, 0.62f, 0.62f);
-            Object.DestroyImmediate(body.GetComponent<Collider>());
-            body.GetComponent<Renderer>().sharedMaterial = bodyMaterial;
+            Transform body = AddRigPart(root.transform, "Body", new Vector3(0.62f, 0.72f, 0.42f),
+                new Vector3(0f, 0.78f, 0f), bodyMaterial);
 
-            GameObject head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.name = "Head";
-            head.transform.SetParent(root.transform, false);
-            head.transform.localPosition = new Vector3(0f, 1.66f, 0f);
-            head.transform.localScale = Vector3.one * 0.46f;
-            Object.DestroyImmediate(head.GetComponent<Collider>());
-            head.GetComponent<Renderer>().sharedMaterial = bodyMaterial;
+            Transform head = AddRigPart(root.transform, "Head", new Vector3(0.52f, 0.48f, 0.5f),
+                new Vector3(0f, 1.5f, 0f), skinMaterial);
 
-            // A little snout so players can tell which way a character is facing.
-            GameObject nose = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            nose.name = "Facing";
-            nose.transform.SetParent(root.transform, false);
-            nose.transform.localPosition = new Vector3(0f, 1.62f, 0.26f);
-            nose.transform.localScale = new Vector3(0.12f, 0.12f, 0.16f);
-            Object.DestroyImmediate(nose.GetComponent<Collider>());
-            nose.GetComponent<Renderer>().sharedMaterial =
+            // Limb pivots sit at the shoulder and hip, so a rotation swings the limb
+            // rather than spinning it about its own middle.
+            Transform armLeft = AddLimb(root.transform, "ArmLeft", new Vector3(0.16f, 0.5f, 0.16f),
+                new Vector3(-0.4f, 1.28f, 0f), trimMaterial);
+            Transform armRight = AddLimb(root.transform, "ArmRight", new Vector3(0.16f, 0.5f, 0.16f),
+                new Vector3(0.4f, 1.28f, 0f), trimMaterial);
+
+            Transform legLeft = AddLimb(root.transform, "LegLeft", new Vector3(0.2f, 0.46f, 0.2f),
+                new Vector3(-0.16f, 0.46f, 0f), trimMaterial);
+            Transform legRight = AddLimb(root.transform, "LegRight", new Vector3(0.2f, 0.46f, 0.2f),
+                new Vector3(0.16f, 0.46f, 0f), trimMaterial);
+
+            // A snout so players can tell which way a character faces without an animation
+            // to read it from.
+            Transform nose = AddRigPart(head, "Facing", new Vector3(0.12f, 0.1f, 0.14f),
+                new Vector3(0f, -0.02f, 0.3f), skinMaterial);
+            nose.GetComponentInChildren<Renderer>().sharedMaterial =
                 HouseFlipAssetBuilder.GetMaterial("Mat_PlayerFace", new Color(0.15f, 0.13f, 0.12f));
 
             root.AddComponent<NetworkObject>();
@@ -721,13 +766,18 @@ namespace HouseFlip.EditorTools
             root.AddComponent<PlayerStatsTracker>();
             root.AddComponent<Interactor>();
 
+            var animator = root.AddComponent<CharacterAnimator>();
+            animator.SetRig(body, head, armLeft, armRight, legLeft, legRight);
+
             var placement = root.AddComponent<PlacementController>();
             HouseFlipAssetBuilder.SetPrivateField(placement, "catalog", catalog);
 
+            // Only the body and head take the player colour; limbs stay in the shared
+            // overalls tone so four players read as a team wearing different shirts.
             HouseFlipAssetBuilder.SetPrivateArray(playerController, "tintedRenderers",
-                new List<Object> { body.GetComponent<Renderer>(), head.GetComponent<Renderer>() });
+                new List<Object> { body.GetComponentInChildren<Renderer>() });
 
-            BuildToolVisuals(root.transform, tools);
+            BuildToolVisuals(armRight, tools);
 
             SetLayerRecursive(root.transform, GameLayers.Player);
 
@@ -737,27 +787,66 @@ namespace HouseFlip.EditorTools
             return prefab;
         }
 
+        /// <summary>A chamfered body part, pivoted at its own centre.</summary>
+        private static Transform AddRigPart(Transform parent, string name, Vector3 size,
+            Vector3 localPosition, Material material)
+        {
+            GameObject part = HouseFlipAssetBuilder.CreateBox(name, size, material, parent);
+            part.transform.localPosition = localPosition;
+
+            // CreateBox puts the visual above the pivot (floor-pivoted, for placement).
+            // Body parts want to rotate about their own middle instead.
+            Transform visual = part.transform.GetChild(0);
+            visual.localPosition = Vector3.zero;
+
+            Object.DestroyImmediate(visual.GetComponent<Collider>());
+            return part.transform;
+        }
+
+        /// <summary>
+        /// A limb whose pivot is at the top, so rotating it swings from the shoulder or
+        /// hip. Getting this wrong makes arms rotate around their elbows, which looks
+        /// like a puppet with broken strings.
+        /// </summary>
+        private static Transform AddLimb(Transform parent, string name, Vector3 size,
+            Vector3 pivotPosition, Material material)
+        {
+            var pivot = new GameObject(name);
+            pivot.transform.SetParent(parent, false);
+            pivot.transform.localPosition = pivotPosition;
+
+            GameObject limb = HouseFlipAssetBuilder.CreateBox($"{name}_Visual", size, material, pivot.transform);
+
+            // Hang the limb below its pivot.
+            Transform visual = limb.transform.GetChild(0);
+            visual.localPosition = new Vector3(0f, -size.y * 0.5f, 0f);
+            Object.DestroyImmediate(visual.GetComponent<Collider>());
+
+            return pivot.transform;
+        }
+
         /// <summary>
         /// Tool models, indexed to match the ToolType enum so index 0 is "no tool".
         /// </summary>
-        private static void BuildToolVisuals(Transform playerRoot, PlayerToolController tools)
+        private static void BuildToolVisuals(Transform armRight, PlayerToolController tools)
         {
+            // Parented to the swinging arm, so the hammer follows the swing for free.
             var hand = new GameObject("Hand").transform;
-            hand.SetParent(playerRoot, false);
-            hand.localPosition = new Vector3(0.34f, 1.05f, 0.28f);
+            hand.SetParent(armRight, false);
+            hand.localPosition = new Vector3(0f, -0.52f, 0.06f);
 
             var visuals = new List<Object> { null };
 
             visuals.Add(CreateToolVisual(hand, "Hammer", new Vector3(0.1f, 0.34f, 0.1f),
-                new Color(0.72f, 0.26f, 0.22f)));
+                ArtPalette.ToolHandle));
             visuals.Add(CreateToolVisual(hand, "Screwdriver", new Vector3(0.06f, 0.30f, 0.06f),
-                new Color(0.95f, 0.72f, 0.20f)));
+                ArtPalette.ToolAccent));
             visuals.Add(CreateToolVisual(hand, "Wrench", new Vector3(0.08f, 0.32f, 0.08f),
-                new Color(0.62f, 0.66f, 0.72f)));
+                ArtPalette.ToolMetal));
             visuals.Add(CreateToolVisual(hand, "Vacuum", new Vector3(0.16f, 0.26f, 0.16f),
                 new Color(0.30f, 0.62f, 0.85f)));
             visuals.Add(CreateToolVisual(hand, "PaintRoller", new Vector3(0.10f, 0.36f, 0.10f),
-                new Color(0.90f, 0.90f, 0.92f)));
+                ArtPalette.ToolMetal));
 
             HouseFlipAssetBuilder.SetPrivateArray(tools, "toolVisuals", visuals);
         }

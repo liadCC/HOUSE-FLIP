@@ -70,6 +70,31 @@ namespace HouseFlip.Player
             }
         }
 
+        /// <summary>
+        /// Server only. Plays a swing on every peer.
+        ///
+        /// Called for discrete actions (a hammer blow, a paint stroke) but never for the
+        /// hold-to-use jobs — cleaning and repairing tick every frame, and an RPC per
+        /// frame per player would cost far more than the animation is worth.
+        /// </summary>
+        public void ServerNotifyToolUsed()
+        {
+            if (IsServer)
+            {
+                PlaySwingClientRpc();
+            }
+        }
+
+        [ClientRpc]
+        private void PlaySwingClientRpc()
+        {
+            var animator = GetComponent<CharacterAnimator>();
+            if (animator != null)
+            {
+                animator.PlaySwing();
+            }
+        }
+
         private void OnToolChanged(ToolType previous, ToolType current) => RefreshVisuals(current);
 
         private void RefreshVisuals(ToolType tool)
