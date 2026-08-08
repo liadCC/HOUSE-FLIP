@@ -43,10 +43,20 @@ namespace HouseFlip.Building
                 Mathf.Round((world.z - offsetZ) / cell) * cell + offsetZ);
         }
 
-        /// <summary>Yaw snapped to 90 degree steps, which is all the MVP placement needs.</summary>
+        /// <summary>
+        /// Yaw snapped to 90 degree steps, which is all the MVP placement needs.
+        /// Kept separate from <see cref="SnapRotation"/> so the arithmetic can be checked
+        /// without going through a quaternion.
+        /// </summary>
+        public static float SnapYaw(float yawDegrees)
+        {
+            return Mathf.Round(yawDegrees / 90f) * 90f;
+        }
+
+        /// <summary>Yaw snapped to 90 degree steps, as a rotation.</summary>
         public static Quaternion SnapRotation(float yawDegrees)
         {
-            return Quaternion.Euler(0f, Mathf.Round(yawDegrees / 90f) * 90f, 0f);
+            return Quaternion.Euler(0f, SnapYaw(yawDegrees), 0f);
         }
 
         public static Vector3 FootprintToWorldSize(Vector2Int footprint, float height)

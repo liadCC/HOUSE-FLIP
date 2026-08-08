@@ -2,6 +2,7 @@ using HouseFlip.Core;
 using HouseFlip.Economy;
 using HouseFlip.Interaction;
 using HouseFlip.Networking;
+using HouseFlip.Painting;
 using HouseFlip.Player;
 using HouseFlip.Polish;
 using Unity.Netcode;
@@ -229,8 +230,8 @@ namespace HouseFlip.Demolition
             GameEvents.RaiseSfx(SfxId.HammerHit);
 
             // Land the swing before the object is gone: flash, a chip of debris, a nudge.
-            HitFlash.FlashOn(gameObject, DebrisTint);
-            ImpactFeedback.Play(transform.position, 0.16f, DebrisTint, debrisPieces: 3, debrisForce: 2.2f);
+            HitFlash.FlashOn(gameObject, CurrentTint);
+            ImpactFeedback.Play(transform.position, 0.16f, CurrentTint, debrisPieces: 3, debrisForce: 2.2f);
         }
 
         [ClientRpc]
@@ -240,7 +241,7 @@ namespace HouseFlip.Demolition
 
             // Structural collapse hits harder than a cabinet giving up.
             float trauma = isStructural ? 0.7f : 0.45f;
-            ImpactFeedback.Play(transform.position, trauma, DebrisTint, debrisPieces: 12, debrisForce: 4.5f);
+            ImpactFeedback.Play(transform.position, trauma, CurrentTint, debrisPieces: 12, debrisForce: 4.5f);
 
             if (debrisEffect != null)
             {
@@ -249,11 +250,25 @@ namespace HouseFlip.Demolition
             }
         }
 
-        /// <summary>Debris takes the object's own colour so a red wall sheds red chunks.</summary>
-        private Color DebrisTint
+        /// <summary>
+        /// The object's current colour, used both for debris tint and as the colour the
+        /// hit flash restores to.
+        ///
+        /// A painted wall is the awkward case: <see cref="PaintableWall"/> writes its
+        /// colour through a MaterialPropertyBlock, so the shared material still reports
+        /// the original grey plaster. Reading the material would silently strip a wall's
+        /// paint the first time somebody hit it.
+        /// </summary>
+        private Color CurrentTint
         {
             get
             {
+                var painted = GetComponent<PaintableWall>();
+                if (painted != null && painted.CurrentColorIndex != PaintColors.Unpainted)
+                {
+                    return painted.CurrentColor;
+                }
+
                 Renderer renderer = GetComponentInChildren<Renderer>();
                 return renderer != null && renderer.sharedMaterial != null
                     ? renderer.sharedMaterial.color

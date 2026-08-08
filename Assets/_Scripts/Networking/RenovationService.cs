@@ -236,9 +236,18 @@ namespace HouseFlip.Networking
             GameObject instance = Instantiate(data.prefab, position, rotation);
 
             var networkObject = instance.GetComponent<NetworkObject>();
-            if (networkObject == null)
+            var placed = instance.GetComponent<PlacedFurniture>();
+
+            // Both components must already be on the prefab. PlacedFurniture is a
+            // NetworkBehaviour, and adding one after Spawn() would give the server a
+            // different behaviour ordering than the clients receive — a desync that only
+            // shows up later, as RPCs landing on the wrong component.
+            if (networkObject == null || placed == null)
             {
-                Debug.LogError($"[RenovationService] Prefab '{data.prefab.name}' has no NetworkObject — cannot spawn.");
+                string missing = networkObject == null ? "NetworkObject" : "PlacedFurniture";
+                Debug.LogError(
+                    $"[RenovationService] Prefab '{data.prefab.name}' is missing a {missing} — cannot spawn.");
+
                 Destroy(instance);
                 BudgetManager.Instance?.Refund(data.cost,
                     data.IsFurniture ? SpendCategory.Furniture : SpendCategory.Renovation);
@@ -246,12 +255,6 @@ namespace HouseFlip.Networking
             }
 
             networkObject.Spawn(true);
-
-            var placed = instance.GetComponent<PlacedFurniture>();
-            if (placed == null)
-            {
-                placed = instance.AddComponent<PlacedFurniture>();
-            }
 
             RoomController room = RoomRegistry.FindRoom(position);
             placed.ServerInitialise(data, room);

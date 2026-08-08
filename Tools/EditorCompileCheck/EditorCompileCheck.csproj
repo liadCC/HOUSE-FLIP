@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Type-checks the code in Unity's *editor* configuration: UNITY_EDITOR defined and the
+    Editor/ scripts included, which is how Unity compiles Assembly-CSharp in the editor.
+
+    LogicTests covers the other configuration (player build: no UNITY_EDITOR, Editor
+    scripts excluded). Between them, both configurations Unity actually builds are
+    checked without needing Unity installed.
+
+    This project has no tests and produces no useful output — a successful build is the
+    entire result.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DefineConstants>$(DefineConstants);UNITY_EDITOR</DefineConstants>
+    <NoWarn>CS0067;CS0649;CS0414;CS0169;CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../LogicTests/Stubs/**/*.cs" />
+    <Compile Include="../../Assets/_Scripts/**/*.cs" />
+  </ItemGroup>
+
+</Project>

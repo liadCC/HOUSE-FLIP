@@ -50,3 +50,9 @@ crashlytics-build.properties
 .idea/
 .vscode/
 .DS_Store
+
+# .NET verification harness build output (Tools/)
+Tools/**/bin/
+Tools/**/obj/
+# ...but the harness projects are real source, not Unity-generated
+!Tools/**/*.csproj

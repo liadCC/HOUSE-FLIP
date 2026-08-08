@@ -95,11 +95,29 @@ namespace HouseFlip.Polish
             }
         }
 
+        /// <summary>
+        /// Drops the pool. Called before play starts, because a pool that survived a
+        /// scene reload holds destroyed GameObjects and handing one out throws.
+        /// </summary>
+        public static void ResetPool()
+        {
+            Pool.Clear();
+            _poolRoot = null;
+            _sharedMaterial = null;
+        }
+
         private static GameObject Rent()
         {
-            if (Pool.Count > 0)
+            while (Pool.Count > 0)
             {
-                return Pool.Dequeue();
+                GameObject pooled = Pool.Dequeue();
+
+                // Belt and braces: a chunk can also be destroyed individually, and a
+                // destroyed Unity object compares equal to null rather than throwing here.
+                if (pooled != null)
+                {
+                    return pooled;
+                }
             }
 
             GameObject chunk = GameObject.CreatePrimitive(PrimitiveType.Cube);

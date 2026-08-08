@@ -150,22 +150,29 @@ over the generated file: the manager looks clips up by id, never by filename.
 
 ### Verification status
 
-There is no Unity installation in the environment this was written in, so the code was
-verified two ways short of running it:
+There is no Unity installation in the environment this was written in, so the code is
+verified as far as it can be short of running the game. See [`Tools/`](Tools/README.md).
 
-1. **Compiled** against hand-written stubs of the UnityEngine, uGUI, Netcode and
-   UnityEditor surfaces it uses, in both configurations Unity itself builds — editor
-   (`UNITY_EDITOR` defined, all scripts) and player (Editor scripts excluded). Both are
-   clean, zero errors and zero warnings. This catches typos, wrong signatures, missing
-   usings and bad types, but the stubs are a reconstruction of Unity's API — where a
-   remembered signature is wrong, the stub and the call site can be wrong together.
-2. **Executed** for the audio path, which has no Unity dependency: all 17 clips are
-   generated, header-validated and checked for level and NaNs. (This found and fixed a
-   real bug — the de-click fade was erasing the attack transient of percussive sounds.)
+```bash
+dotnet test Tools/LogicTests          # 43 tests + player-build type-check
+dotnet build Tools/EditorCompileCheck # editor-configuration type-check
+```
 
-What that does **not** cover: Netcode's RPC source generators, Unity's own analyzers, and
-anything about runtime behaviour. **Nothing here has been played.** Expect to fix some
-things on first open.
+1. **Type-checked** against hand-written stubs of the UnityEngine, uGUI, Netcode and
+   UnityEditor surfaces, in both configurations Unity itself builds — editor
+   (`UNITY_EDITOR` defined, all scripts) and player (Editor scripts excluded). Both
+   clean, zero errors and zero warnings.
+2. **Tested** — 43 NUnit tests running the real sources, asserting the economy formulas
+   reproduce the worked examples printed in GDD §17, §19 and §28, that the awards
+   allocation satisfies its one-each/no-duplicates properties, and that grid snapping is
+   idempotent.
+3. **Executed** for the audio path, which has no Unity dependency: all 17 clips
+   generated, header-validated, level-checked. (This found a real bug — the de-click fade
+   was erasing the attack transient of percussive sounds.)
+
+What none of that covers: Netcode's RPC source generators, Unity's analyzers, and
+anything about runtime behaviour, physics, rendering or networking. **Nothing here has
+been played.** Expect to fix some things on first open.
 
 ## Post-MVP
 
