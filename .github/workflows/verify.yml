@@ -1,0 +1,30 @@
+name: Verify
+
+# Type-checks and tests the game code without needing a Unity installation or licence.
+# See Tools/README.md for what this does and does not cover.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Type-check both Unity configurations and run the logic tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Player-build configuration: no UNITY_EDITOR, Editor/ scripts excluded.
+      - name: Logic tests
+        run: dotnet test Tools/LogicTests --nologo --verbosity normal
+
+      # Editor configuration: UNITY_EDITOR defined, Editor/ scripts included.
+      - name: Editor-configuration type-check
+        run: dotnet build Tools/EditorCompileCheck --nologo

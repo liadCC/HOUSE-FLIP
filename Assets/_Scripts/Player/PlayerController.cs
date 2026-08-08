@@ -216,5 +216,40 @@ namespace HouseFlip.Player
 
         /// <summary>Called by the server when a session begins so a stale freeze cannot persist.</summary>
         public static void ResetInputGate() => InputEnabled = true;
+
+        /// <summary>
+        /// Server-requested reposition (spawn points, and anything that needs to move a
+        /// player later).
+        ///
+        /// This has to be an RPC rather than the server writing the transform directly:
+        /// players are owner-authoritative (GDD 22), so a server-side move would be
+        /// overwritten by the owner's very next transform update. Only the owner can
+        /// actually move itself, so we ask it to.
+        /// </summary>
+        [ClientRpc]
+        public void TeleportClientRpc(Vector3 position, Quaternion rotation, ClientRpcParams rpcParams = default)
+        {
+            if (!IsOwner)
+            {
+                return;
+            }
+
+            ApplyTeleport(position, rotation);
+        }
+
+        private void ApplyTeleport(Vector3 position, Quaternion rotation)
+        {
+            // CharacterController owns the transform while enabled and will silently
+            // discard a direct write, so it has to be switched off for the assignment.
+            bool wasEnabled = _controller.enabled;
+            _controller.enabled = false;
+
+            transform.SetPositionAndRotation(position, rotation);
+
+            _horizontalVelocity = Vector3.zero;
+            _verticalVelocity = 0f;
+
+            _controller.enabled = wasEnabled;
+        }
     }
 }

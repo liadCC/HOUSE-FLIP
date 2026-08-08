@@ -96,20 +96,17 @@ namespace HouseFlip.Networking
                 return;
             }
 
-            // The character controller fights direct transform writes, so disable it
-            // for the single frame in which we teleport.
-            var characterController = playerObject.GetComponent<CharacterController>();
-            if (characterController != null)
+            var controller = playerObject.GetComponent<PlayerController>();
+            if (controller == null)
             {
-                characterController.enabled = false;
+                return;
             }
 
-            playerObject.transform.SetPositionAndRotation(point.position, point.rotation);
-
-            if (characterController != null)
-            {
-                characterController.enabled = true;
-            }
+            // Ask the owner to move rather than writing the transform here. Players are
+            // owner-authoritative (GDD 22), so a server-side write would be overwritten
+            // by the owner's next update and everyone would end up stacked on the
+            // prefab's origin — which sits inside the house, not out in the yard.
+            controller.TeleportClientRpc(point.position, point.rotation);
         }
 
         public void SetSpawnPoints(Transform[] points) => spawnPoints = points;
