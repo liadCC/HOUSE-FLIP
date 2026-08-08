@@ -1,6 +1,7 @@
 using HouseFlip.Core;
 using HouseFlip.Economy;
 using HouseFlip.Events;
+using HouseFlip.Furniture;
 using HouseFlip.Player;
 using HouseFlip.UI;
 using Unity.Netcode;
@@ -52,12 +53,17 @@ namespace HouseFlip.GameFlow
         /// <summary>Server only. Buys the house and starts the clock (GDD 3).</summary>
         public void StartRound()
         {
-            if (!IsServer)
+            if (!IsServer || _state.Value != GameState.Lobby)
             {
+                // Restarting from Renovating would rewind the budget and the clock while the
+                // players were still working, so the entry point is gated on the phase itself
+                // rather than trusting every caller to check.
                 return;
             }
 
             PlayerController.ResetInputGate();
+
+            ServerClearHouse();
 
             BudgetManager.Instance?.ServerResetForNewRound();
             HouseValueManager.Instance?.ServerResetForNewRound();
@@ -71,6 +77,33 @@ namespace HouseFlip.GameFlow
             TimerManager.Instance?.ServerStart();
 
             _state.Value = GameState.Renovating;
+        }
+
+        /// <summary>
+        /// Server only. Strips out everything the previous round bought or fixed.
+        ///
+        /// The scene is never reloaded between rounds, so every room, dirt pile, fixture and
+        /// placed item survives into the next one. Resetting only the budget and the house
+        /// value (as this used to) hands the team a full wallet on top of an already finished
+        /// house: round two opens clean, furnished and repaired, and sells for a large profit
+        /// nobody earned. GDD 27 requires the second round to be a real round.
+        /// </summary>
+        private static void ServerClearHouse()
+        {
+            // Despawn first: PlacedFurniture backs its contribution out of the room as it
+            // despawns, so doing this before the room reset avoids leaving a stale count.
+            foreach (PlacedFurniture placed in FindObjectsByType<PlacedFurniture>(FindObjectsSortMode.None))
+            {
+                if (placed != null && placed.NetworkObject != null && placed.NetworkObject.IsSpawned)
+                {
+                    placed.NetworkObject.Despawn(true);
+                }
+            }
+
+            foreach (RoomController room in RoomRegistry.All)
+            {
+                room?.ServerResetForNewRound();
+            }
         }
 
         /// <summary>
@@ -134,9 +167,13 @@ namespace HouseFlip.GameFlow
                 case GameState.Results:
                     ReturnToLobby();
                     break;
-                case GameState.Lobby:
-                    StartRound();
-                    break;
+
+                // Deliberately no Lobby case. Every client shows a Continue button on the
+                // results screen and the button is hidden by a NetworkVariable delta that is
+                // not ordered against these RPCs, so two players clicking it together sends a
+                // second request that arrives once the state is already Lobby. Starting the
+                // round here would skip the lobby and the ready gate entirely, dropping
+                // everyone straight into round two. Starting a round is LobbyManager's job.
             }
         }
 

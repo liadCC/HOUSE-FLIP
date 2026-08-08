@@ -170,10 +170,43 @@ namespace HouseFlip.Demolition
 
             GameEvents.RaiseHouseStateDirty();
 
-            if (!disableInsteadOfDestroy && NetworkObject != null && NetworkObject.IsSpawned)
+            // Structural damage is not recorded anywhere — it is counted every sweep by
+            // walking the room's live destructibles (RoomController.CountStructuralDamage /
+            // ConditionSubScore). Despawning the wreck deletes the only evidence, so the
+            // $2000 penalty and the Condition hit evaporate before the next recalculation
+            // and smashing a load-bearing wall ends up free. Non-structural wrecks are not
+            // counted either way and can go.
+            bool mustRemainForScoring = isStructural;
+
+            if (!disableInsteadOfDestroy && !mustRemainForScoring
+                && NetworkObject != null && NetworkObject.IsSpawned)
             {
                 NetworkObject.Despawn(true);
             }
+        }
+
+        /// <summary>
+        /// Server only. Rebuilds a smashed object for a new round.
+        ///
+        /// Structural wrecks are deliberately never despawned, because the damage penalty
+        /// is recounted each sweep from the live object rather than recorded anywhere. That
+        /// makes them the one piece of round state with no way back — without this, a wall
+        /// smashed in round 1 keeps charging its $2000 against every future round.
+        /// </summary>
+        public void ServerRestore()
+        {
+            if (!IsServer || _hitPoints.Value == maxHitPoints)
+            {
+                return;
+            }
+
+            _hitPoints.Value = maxHitPoints;
+
+            // RefreshVisuals runs from the OnValueChanged callback, but only on peers that
+            // see the change. Re-run it here so a server with no remote clients also puts
+            // its colliders and meshes back.
+            RefreshVisuals(maxHitPoints);
+            GameEvents.RaiseHouseStateDirty();
         }
 
         private void ServerApplyKnockback()
@@ -212,11 +245,12 @@ namespace HouseFlip.Demolition
                 damagedVisual.SetActive(!destroyed && damaged);
             }
 
-            if (destroyed && disableInsteadOfDestroy)
+            if (destroyed)
             {
-                if (intactVisual != null) intactVisual.SetActive(false);
-                if (damagedVisual != null) damagedVisual.SetActive(false);
-
+                // Both visuals are already off by the lines above; what still has to go is
+                // the collision. This used to be gated on disableInsteadOfDestroy, so any
+                // wreck that stayed in the world became an invisible wall the player could
+                // not walk through — the hole they just smashed was still solid.
                 foreach (Collider collider in GetComponentsInChildren<Collider>())
                 {
                     collider.enabled = false;

@@ -36,6 +36,10 @@ namespace HouseFlip.Repair
 
         private RoomController _room;
 
+        /// <summary>Server only. True once the player has been told the team cannot afford
+        /// this repair, so the notice is not repeated until the situation changes.</summary>
+        private bool _reportedNoFunds;
+
         public bool IsRepaired => _repaired.Value;
 
         /// <summary>Doubles as the <see cref="IToolGated"/> hint, so [E] resolves to this fixture
@@ -91,22 +95,29 @@ namespace HouseFlip.Repair
             return $"Fix {fixtureName} (${repairCost:0})";
         }
 
-        public void OnInteract(PlayerController player) => TryRepair(player, Time.deltaTime);
+        /// <summary>
+        /// Deliberately does no work. Repair is hold-to-use, and GetKey is already true on
+        /// the frame GetKeyDown fires — advancing progress here as well as in Update spent
+        /// two ticks on the press frame, so tapping [E] repaired faster than holding it.
+        /// </summary>
+        public void OnInteract(PlayerController player)
+        {
+        }
 
         private void Update()
         {
+            if (!Input.GetKey(KeyCode.E) || _repaired.Value || !PlayerController.InputEnabled)
+            {
+                return;
+            }
+
             PlayerController local = PlayerRegistry.LocalPlayer;
-            if (local == null || !local.IsOwner || !PlayerController.InputEnabled || _repaired.Value)
+            if (local == null || !local.IsOwner)
             {
                 return;
             }
 
-            if (!Input.GetKey(KeyCode.E))
-            {
-                return;
-            }
-
-            var interactor = local.GetComponent<Interactor>();
+            Interactor interactor = Interactor.For(local);
             if (interactor == null || !ReferenceEquals(interactor.Current, this))
             {
                 return;
@@ -138,7 +149,9 @@ namespace HouseFlip.Repair
                 return;
             }
 
-            _progress.Value += Mathf.Max(0f, deltaTime);
+            // Hold at full so the repair completes the instant funds arrive, and so the
+            // prompt cannot read "Fixing… 480%" while the player waits.
+            _progress.Value = Mathf.Min(repairDuration, _progress.Value + Mathf.Max(0f, deltaTime));
             if (_progress.Value < repairDuration)
             {
                 return;
@@ -146,9 +159,27 @@ namespace HouseFlip.Repair
 
             // Charge only at the moment of completion — half-finished work is free.
             BudgetManager budget = BudgetManager.Instance;
+
+            if (budget != null && !budget.CanAfford(repairCost))
+            {
+                // Ask the budget only when the answer can change. TrySpend answers a
+                // failure with a targeted "No Budget!" ClientRpc, and because progress is
+                // pinned at full the failing call repeated every frame the player kept
+                // holding [E] — roughly sixty rejection toasts a second, plus the RPC
+                // traffic to carry them.
+                if (!_reportedNoFunds)
+                {
+                    _reportedNoFunds = true;
+                    budget.TrySpend(repairCost, repairerClientId, SpendCategory.Renovation);
+                }
+
+                return;
+            }
+
+            _reportedNoFunds = false;
+
             if (budget != null && !budget.TrySpend(repairCost, repairerClientId, SpendCategory.Renovation))
             {
-                _progress.Value = repairDuration; // Hold at full so it completes the instant funds arrive.
                 return;
             }
 
@@ -173,6 +204,7 @@ namespace HouseFlip.Repair
 
             _repaired.Value = false;
             _progress.Value = 0f;
+            _reportedNoFunds = false;
             GameEvents.RaiseHouseStateDirty();
         }
 

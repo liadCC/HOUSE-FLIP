@@ -76,6 +76,15 @@ namespace HouseFlip.GameFlow
         {
             ulong sender = rpcParams.Receive.SenderClientId;
 
+            // A ready-up only means anything in the lobby. Accepting one during a round would
+            // bank it in the list, and because the list is only cleared when a round starts,
+            // it would still be there on the return to lobby — so the next round could
+            // auto-start off readies nobody gave it while sitting on the lobby screen.
+            if (GameManager.Instance != null && GameManager.Instance.State != GameState.Lobby)
+            {
+                return;
+            }
+
             if (IsReady(sender))
             {
                 RemoveReady(sender);

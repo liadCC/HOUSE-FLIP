@@ -160,6 +160,62 @@ namespace HouseFlip.Economy
             GameEvents.RaiseHouseStateDirty();
         }
 
+        /// <summary>
+        /// Server only. Puts everything this room owns back to its round-start condition.
+        ///
+        /// Every one of these values is per-round, but all of them live on objects that
+        /// survive from one round into the next: the scene is never reloaded between rounds.
+        /// Without this reset the second round inherits the first one's *finished* house —
+        /// scrubbed dirt, mended fixtures, banked design and furniture totals, plus any
+        /// permanent flood penalty — while the budget is handed back in full. The house is
+        /// then worth a fortune the moment the timer starts and the team is paid twice for
+        /// work it did once.
+        /// </summary>
+        public void ServerResetForNewRound()
+        {
+            if (!IsServer)
+            {
+                return;
+            }
+
+            CleanlinessPenalty.Value = 0f;
+            DesignPoints.Value = 0f;
+            FurnitureValue.Value = 0f;
+            FurnitureCount.Value = 0;
+
+            foreach (DirtSource dirt in _dirt)
+            {
+                // Top back up to full; ServerAddDirt clamps at MaxDirt.
+                if (dirt != null)
+                {
+                    dirt.ServerAddDirt(dirt.MaxDirt);
+                }
+            }
+
+            foreach (RepairableFixture fixture in _fixtures)
+            {
+                if (fixture != null)
+                {
+                    fixture.ServerBreak();
+                }
+            }
+
+            // Structural wrecks are never despawned (the damage penalty is recounted from
+            // the live object), so without rebuilding them a wall smashed in round 1 would
+            // keep charging against every round after it.
+            foreach (Destructible destructible in _destructibles)
+            {
+                if (destructible != null)
+                {
+                    destructible.ServerRestore();
+                }
+            }
+
+            Painting.PaintableWall.ServerResetRoom(this);
+
+            RecomputeCleanliness();
+        }
+
         /// <summary>Server only. Used by the water-leak event when the pipe is never fixed.</summary>
         public void ApplyCleanlinessPenalty(float amount)
         {

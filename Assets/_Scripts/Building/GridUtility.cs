@@ -44,6 +44,27 @@ namespace HouseFlip.Building
         }
 
         /// <summary>
+        /// Footprint snap for a piece that has been turned on the grid.
+        ///
+        /// A 3x2 desk rotated 90 degrees occupies 2x3 cells, so which axis is the odd one
+        /// swaps with it. Snapping a rotated piece against its unrotated footprint applies
+        /// the half-cell offset to the wrong axis and parks it half a cell off the grid —
+        /// which is every wall segment, door, window, cabinet, wardrobe, desk, bed and rug
+        /// in the catalog, none of which then line up with the ones already placed.
+        /// </summary>
+        public static Vector3 SnapFootprint(Vector3 world, Vector2Int footprint, float yawDegrees)
+        {
+            return SnapFootprint(world, RotateFootprint(footprint, yawDegrees));
+        }
+
+        /// <summary>Footprint as it lies on the world grid after a 90 degree step rotation.</summary>
+        public static Vector2Int RotateFootprint(Vector2Int footprint, float yawDegrees)
+        {
+            int quarterTurns = Mathf.Abs(Mathf.RoundToInt(SnapYaw(yawDegrees) / 90f)) % 2;
+            return quarterTurns == 0 ? footprint : new Vector2Int(footprint.y, footprint.x);
+        }
+
+        /// <summary>
         /// Yaw snapped to 90 degree steps, which is all the MVP placement needs.
         /// Kept separate from <see cref="SnapRotation"/> so the arithmetic can be checked
         /// without going through a quaternion.

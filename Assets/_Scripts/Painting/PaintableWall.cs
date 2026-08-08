@@ -144,6 +144,33 @@ namespace HouseFlip.Painting
         }
 
         /// <summary>True when every painted wall in this room sits in a matching scheme.</summary>
+        /// <summary>
+        /// Server only. Strips the paint back to bare plaster for a new round.
+        ///
+        /// Not a call to ServerPaint: that charges the budget, and it early-returns when
+        /// the colour is unchanged — so without a separate path a round-2 team had to pick
+        /// a *different* colour than round 1 to earn the points for the same work.
+        /// </summary>
+        public void ServerResetForNewRound()
+        {
+            if (IsServer)
+            {
+                _colorIndex.Value = PaintColors.Unpainted;
+            }
+        }
+
+        /// <summary>Every wall currently standing in the given room. Server-side helper for the round reset.</summary>
+        public static void ServerResetRoom(RoomController room)
+        {
+            foreach (PaintableWall wall in AllWalls)
+            {
+                if (wall != null && wall.Room == room)
+                {
+                    wall.ServerResetForNewRound();
+                }
+            }
+        }
+
         private bool RoomSchemeIsHarmonious()
         {
             if (_room == null)
@@ -153,8 +180,14 @@ namespace HouseFlip.Painting
 
             int painted = 0;
 
-            foreach (PaintableWall wall in AllWalls)
+            // Every painted pair has to match, not just each wall against the one that was
+            // painted last. IsHarmonious is not transitive — white goes with anything — so
+            // checking only against the new colour meant a room already holding a clashing
+            // Blue and Red started paying the matching-palette bonus the moment somebody
+            // added a white wall.
+            for (int i = 0; i < AllWalls.Count; i++)
             {
+                PaintableWall wall = AllWalls[i];
                 if (wall == null || wall._room != _room || wall._colorIndex.Value < 0)
                 {
                     continue;
@@ -162,9 +195,18 @@ namespace HouseFlip.Painting
 
                 painted++;
 
-                if (!PaintColors.IsHarmonious(wall._colorIndex.Value, _colorIndex.Value))
+                for (int j = i + 1; j < AllWalls.Count; j++)
                 {
-                    return false;
+                    PaintableWall other = AllWalls[j];
+                    if (other == null || other._room != _room || other._colorIndex.Value < 0)
+                    {
+                        continue;
+                    }
+
+                    if (!PaintColors.IsHarmonious(wall._colorIndex.Value, other._colorIndex.Value))
+                    {
+                        return false;
+                    }
                 }
             }
 

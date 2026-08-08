@@ -92,25 +92,27 @@ namespace HouseFlip.Cleaning
 
         public void OnInteract(PlayerController player)
         {
-            // A single tap still does a little work; holding [E] is handled in Update below.
-            TryClean(player, Time.deltaTime);
+            // Deliberately does no work. Cleaning is hold-to-use, and GetKey is already
+            // true on the frame GetKeyDown fires — so scrubbing here as well as in Update
+            // applied two ticks of cleaning on the press frame, letting a rapid tapper
+            // clean at double rate.
         }
 
         private void Update()
         {
             // Continuous cleaning while the key is held, driven by the local player only.
+            if (!Input.GetKey(KeyCode.E) || IsClean || !PlayerController.InputEnabled)
+            {
+                return;
+            }
+
             PlayerController local = PlayerRegistry.LocalPlayer;
-            if (local == null || !local.IsOwner || !PlayerController.InputEnabled || IsClean)
+            if (local == null || !local.IsOwner)
             {
                 return;
             }
 
-            if (!Input.GetKey(KeyCode.E))
-            {
-                return;
-            }
-
-            var interactor = local.GetComponent<Interactor>();
+            Interactor interactor = Interactor.For(local);
             if (interactor == null || !ReferenceEquals(interactor.Current, this))
             {
                 return;

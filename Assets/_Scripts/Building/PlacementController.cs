@@ -38,6 +38,12 @@ namespace HouseFlip.Building
         public bool IsPlacing => _selected != null;
         public PlacementCatalog Catalog => catalog;
 
+        /// <summary>
+        /// Clamped to the server's limit: the RPC is rejected past it, so previewing a
+        /// green ghost further out would just be a promise the server refuses to keep.
+        /// </summary>
+        private float MaxDistance => Mathf.Min(maxPlacementDistance, PlacementValidator.MaxPlacementDistance);
+
         private void Awake()
         {
             _player = GetComponent<PlayerController>();
@@ -148,22 +154,27 @@ namespace HouseFlip.Building
 
             Ray ray = new Ray(_camera.transform.position, _camera.transform.forward);
 
-            if (!Physics.Raycast(ray, out RaycastHit hit, maxPlacementDistance + 4f,
+            if (!Physics.Raycast(ray, out RaycastHit hit, MaxDistance + 4f,
                     GameLayers.PlacementSurfaceMask, QueryTriggerInteraction.Ignore))
             {
                 SetGhostVisible(false);
                 _valid = false;
+
+                // The prompt is an override, so returning without touching it leaves the
+                // last "[LMB] Place Sofa ($1900)" line pinned to the screen while there is
+                // no ghost and clicking does nothing.
+                InteractionPromptUI.SetOverride("Aim At A Surface");
                 return;
             }
 
             SetGhostVisible(true);
 
-            Vector3 snapped = GridUtility.SnapFootprint(hit.point, _selected.size);
+            Vector3 snapped = GridUtility.SnapFootprint(hit.point, _selected.size, _yaw);
             Quaternion rotation = GridUtility.SnapRotation(_yaw);
 
             _ghost.transform.SetPositionAndRotation(snapped, rotation);
 
-            _valid = Validate(snapped, rotation, hit, out string reason);
+            _valid = Validate(snapped, rotation, out string reason);
             ApplyGhostColor(_valid ? validColor : invalidColor);
 
             InteractionPromptUI.SetOverride(_valid
@@ -175,11 +186,11 @@ namespace HouseFlip.Building
         /// Local validation. Mirrored server-side in <see cref="PlacementValidator"/> so the
         /// preview and the authoritative check never disagree.
         /// </summary>
-        private bool Validate(Vector3 position, Quaternion rotation, RaycastHit surface, out string reason)
+        private bool Validate(Vector3 position, Quaternion rotation, out string reason)
         {
             reason = null;
 
-            if (Vector3.Distance(transform.position, position) > maxPlacementDistance)
+            if (Vector3.Distance(transform.position, position) > MaxDistance)
             {
                 reason = "Too Far";
                 return false;
@@ -191,8 +202,12 @@ namespace HouseFlip.Building
                 return false;
             }
 
-            if (_selected is BuildingData building && building.requiresFloorContact
-                && Vector3.Dot(surface.normal, Vector3.up) < 0.5f)
+            // Probed rather than read off the aim raycast's normal, because the aim hit is
+            // taken before the grid snap: the ghost can snap a metre away from the surface
+            // the player was pointing at, and only the snapped position is sent to the
+            // server. Same helper the server runs, so the two answers cannot diverge.
+            if (PlacementValidator.RequiresFloorContact(_selected)
+                && !PlacementValidator.HasFloorSupport(position))
             {
                 reason = "Needs Floor";
                 return false;
@@ -251,6 +266,12 @@ namespace HouseFlip.Building
             }
 
             SetLayerRecursive(_ghost.transform, GameLayers.PlacementGhost);
+
+            // Instantiate drops the copy at the prefab's own transform — world origin.
+            // Script execution order decides whether UpdateGhost moves it before the frame
+            // is drawn, so without this the player can get a one-frame flash of the item
+            // sitting in the middle of the map.
+            SetGhostVisible(false);
         }
 
         /// <summary>A preview must not collide, network, or run gameplay logic.</summary>
@@ -279,8 +300,21 @@ namespace HouseFlip.Building
             }
         }
 
+        /// <summary>
+        /// Cached for the lifetime of the process. A Material created with <c>new</c> is an
+        /// unmanaged object that outlives the GameObject referencing it, so building one per
+        /// ghost leaked one material for every trip into placement mode — and no ghost
+        /// material is wired up in the scene, so this is the path the shipped game takes.
+        /// </summary>
+        private static Material _fallbackGhostMaterial;
+
         private static Material CreateFallbackGhostMaterial()
         {
+            if (_fallbackGhostMaterial != null)
+            {
+                return _fallbackGhostMaterial;
+            }
+
             Shader shader = Shader.Find("Standard");
             var material = new Material(shader != null ? shader : Shader.Find("Diffuse"));
 
@@ -293,6 +327,7 @@ namespace HouseFlip.Building
             material.EnableKeyword("_ALPHABLEND_ON");
             material.renderQueue = 3000;
 
+            _fallbackGhostMaterial = material;
             return material;
         }
 
