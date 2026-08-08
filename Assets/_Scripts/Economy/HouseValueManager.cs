@@ -16,16 +16,16 @@ namespace HouseFlip.Economy
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server);
 
-        // Server-side accumulators for one-shot bonuses that are not derivable from
-        // the current room state (a repaired tap looks identical to one that was never broken).
+        // Server-side accumulator for one-shot bonuses that are not derivable from the
+        // current room state (a repaired tap looks identical to one that was never broken).
+        // Furniture value is deliberately NOT accumulated here — it lives per room, so it
+        // can be capped and cannot be farmed by placing the same item repeatedly.
         private float _renovationBonus;
-        private float _furnitureBonus;
 
         private bool _dirty;
 
         public float Current => _houseValue.Value;
         public float RenovationBonus => _renovationBonus;
-        public float FurnitureBonus => _furnitureBonus;
 
         public override void OnNetworkSpawn()
         {
@@ -73,7 +73,6 @@ namespace HouseFlip.Economy
             }
 
             _renovationBonus = 0f;
-            _furnitureBonus = 0f;
             _houseValue.Value = GameConstants.HouseBaseValue;
             MarkDirty();
         }
@@ -87,30 +86,6 @@ namespace HouseFlip.Economy
             }
 
             _renovationBonus += Mathf.Max(0f, bonus);
-            MarkDirty();
-        }
-
-        /// <summary>Server only.</summary>
-        public void OnFurniturePlaced(float bonus)
-        {
-            if (!IsServer)
-            {
-                return;
-            }
-
-            _furnitureBonus += Mathf.Max(0f, bonus);
-            MarkDirty();
-        }
-
-        /// <summary>Server only. Removing furniture claws the bonus back.</summary>
-        public void OnFurnitureRemoved(float bonus)
-        {
-            if (!IsServer)
-            {
-                return;
-            }
-
-            _furnitureBonus = Mathf.Max(0f, _furnitureBonus - Mathf.Max(0f, bonus));
             MarkDirty();
         }
 
@@ -143,6 +118,7 @@ namespace HouseFlip.Economy
         {
             float cleanlinessBonus = 0f;
             float designBonus = 0f;
+            float furnitureBonus = 0f;
             float dirtPenalty = 0f;
             float damagePenalty = 0f;
 
@@ -155,6 +131,7 @@ namespace HouseFlip.Economy
 
                 cleanlinessBonus += Mathf.Clamp01(room.Cleanliness.Value) * GameConstants.MaxCleanlinessValuePerRoom;
                 designBonus += room.DesignPoints.Value * GameConstants.DesignPointValue;
+                furnitureBonus += room.FurnitureValue.Value;
                 dirtPenalty += room.RemainingDirt() * GameConstants.DirtPenaltyPerUnit;
                 damagePenalty += room.CountStructuralDamage() * GameConstants.StructuralDamagePenalty;
                 damagePenalty += room.CountUnrepairedFixtures() * GameConstants.BrokenFixturePenalty;
@@ -164,7 +141,7 @@ namespace HouseFlip.Economy
             {
                 BaseValue = GameConstants.HouseBaseValue,
                 RenovationBonus = _renovationBonus,
-                FurnitureBonus = _furnitureBonus,
+                FurnitureBonus = furnitureBonus,
                 DesignBonus = designBonus,
                 CleanlinessBonus = cleanlinessBonus,
                 DamagePenalty = damagePenalty + dirtPenalty

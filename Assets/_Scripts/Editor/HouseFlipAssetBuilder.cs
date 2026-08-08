@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using HouseFlip.Balance;
 using HouseFlip.Building;
 using HouseFlip.Core;
 using HouseFlip.Events;
@@ -187,104 +188,39 @@ namespace HouseFlip.EditorTools
         }
 
         /// <summary>
-        /// The full MVP catalog from GDD 10 and 11.
-        /// Costs and value contributions are first-pass balance: a full renovation of every
-        /// room lands a little under the $20,000 budget, so a careful team turns a profit
-        /// and a chaotic one does not.
+        /// Turns <see cref="CatalogDefinition"/> into the ScriptableObjects the game loads.
+        ///
+        /// The numbers deliberately live in that plain data table rather than here: the
+        /// balance model reads the same table, so the economy cannot be tuned in one place
+        /// and generated from another.
         /// </summary>
         public static PlacementCatalog BuildCatalog()
         {
-            var buildings = new List<BuildingData>
+            var buildings = new List<BuildingData>();
+            foreach (PlaceableDefinition definition in CatalogDefinition.Buildings)
             {
-                MakeBuilding("Build_WallSegment", "Wall Segment", 350f, 900f, new Vector2Int(4, 1), 3f,
-                    new Vector3(2f, 3f, 0.2f), new Color(0.90f, 0.88f, 0.83f), MassCategory.Heavy),
-                MakeBuilding("Build_Door", "Door", 450f, 1100f, new Vector2Int(2, 1), 2.4f,
-                    new Vector3(1f, 2.4f, 0.14f), new Color(0.55f, 0.36f, 0.22f), MassCategory.Medium),
-                MakeBuilding("Build_Window", "Window", 500f, 1300f, new Vector2Int(2, 1), 1.4f,
-                    new Vector3(1.2f, 1.2f, 0.12f), new Color(0.62f, 0.82f, 0.92f), MassCategory.Medium),
-                MakeBuilding("Build_FloorTile", "Floor Tile", 90f, 260f, new Vector2Int(2, 2), 0.12f,
-                    new Vector3(1f, 0.1f, 1f), new Color(0.82f, 0.79f, 0.72f), MassCategory.Light),
-                MakeBuilding("Build_Cabinet", "Cabinet", 620f, 1500f, new Vector2Int(2, 1), 1.9f,
-                    new Vector3(1f, 1.9f, 0.55f), new Color(0.72f, 0.55f, 0.35f), MassCategory.Heavy),
-                MakeBuilding("Build_Sink", "Sink", 540f, 1400f, new Vector2Int(2, 1), 0.95f,
-                    new Vector3(0.9f, 0.9f, 0.5f), new Color(0.92f, 0.94f, 0.95f), MassCategory.Medium)
-            };
+                BuildingData data = CreateData<BuildingData>($"{DataRoot}/Building", definition.AssetName);
+                ApplyCommon(data, definition);
+                data.requiresFloorContact = definition.RequiresFloorContact;
+                EditorUtility.SetDirty(data);
+                buildings.Add(data);
+            }
 
-            var furniture = new List<FurnitureData>
+            var furniture = new List<FurnitureData>();
+            foreach (PlaceableDefinition definition in CatalogDefinition.Furniture)
             {
-                // Living Room
-                MakeFurniture("Furniture_Sofa", "Sofa", FurnitureCategory.LivingRoom, 1400f, 2600f, 22f,
-                    new Vector2Int(4, 2), 0.85f, new Vector3(2f, 0.85f, 1f),
-                    new Color(0.36f, 0.52f, 0.78f), MassCategory.Heavy),
-                MakeFurniture("Furniture_TV", "TV", FurnitureCategory.LivingRoom, 900f, 1900f, 16f,
-                    new Vector2Int(3, 1), 0.7f, new Vector3(1.4f, 0.7f, 0.12f),
-                    new Color(0.14f, 0.14f, 0.17f), MassCategory.Medium),
-                MakeFurniture("Furniture_CoffeeTable", "Coffee Table", FurnitureCategory.LivingRoom, 380f, 800f, 10f,
-                    new Vector2Int(2, 2), 0.45f, new Vector3(1f, 0.45f, 0.6f),
-                    new Color(0.62f, 0.42f, 0.26f), MassCategory.Medium),
-                MakeFurniture("Furniture_Chair", "Chair", FurnitureCategory.LivingRoom, 220f, 480f, 7f,
-                    new Vector2Int(1, 1), 0.9f, new Vector3(0.5f, 0.9f, 0.5f),
-                    new Color(0.78f, 0.42f, 0.34f), MassCategory.Light),
-                MakeFurniture("Furniture_FloorLamp", "Floor Lamp", FurnitureCategory.LivingRoom, 260f, 560f, 12f,
-                    new Vector2Int(1, 1), 1.6f, new Vector3(0.28f, 1.6f, 0.28f),
-                    new Color(0.95f, 0.88f, 0.62f), MassCategory.Light),
+                FurnitureData data = CreateData<FurnitureData>($"{DataRoot}/Furniture", definition.AssetName);
+                ApplyCommon(data, definition);
+                data.category = definition.Category;
 
-                // Bedroom
-                MakeFurniture("Furniture_Bed", "Bed", FurnitureCategory.Bedroom, 1600f, 3000f, 24f,
-                    new Vector2Int(4, 5), 0.6f, new Vector3(2f, 0.6f, 2.4f),
-                    new Color(0.85f, 0.80f, 0.72f), MassCategory.Heavy),
-                MakeFurniture("Furniture_Wardrobe", "Wardrobe", FurnitureCategory.Bedroom, 1100f, 2200f, 18f,
-                    new Vector2Int(3, 2), 2.1f, new Vector3(1.4f, 2.1f, 0.7f),
-                    new Color(0.58f, 0.40f, 0.26f), MassCategory.Heavy),
-                MakeFurniture("Furniture_Desk", "Desk", FurnitureCategory.Bedroom, 520f, 1050f, 11f,
-                    new Vector2Int(3, 2), 0.78f, new Vector3(1.4f, 0.78f, 0.7f),
-                    new Color(0.68f, 0.50f, 0.32f), MassCategory.Medium),
-                MakeFurniture("Furniture_BedsideLamp", "Bedside Lamp", FurnitureCategory.Bedroom, 180f, 380f, 9f,
-                    new Vector2Int(1, 1), 0.5f, new Vector3(0.3f, 0.5f, 0.3f),
-                    new Color(0.96f, 0.86f, 0.55f), MassCategory.Light),
+                // Decoration suits any room; everything else is judged on where it lands.
+                data.preferredRooms = definition.Category == FurnitureCategory.Decoration
+                    ? new FurnitureCategory[0]
+                    : new[] { definition.Category };
 
-                // Kitchen
-                MakeFurniture("Furniture_Fridge", "Fridge", FurnitureCategory.Kitchen, 1500f, 2900f, 20f,
-                    new Vector2Int(2, 2), 1.9f, new Vector3(0.9f, 1.9f, 0.8f),
-                    new Color(0.90f, 0.92f, 0.94f), MassCategory.Heavy),
-                MakeFurniture("Furniture_Oven", "Oven", FurnitureCategory.Kitchen, 1150f, 2300f, 17f,
-                    new Vector2Int(2, 2), 0.95f, new Vector3(0.85f, 0.95f, 0.7f),
-                    new Color(0.28f, 0.28f, 0.32f), MassCategory.Heavy),
-                MakeFurniture("Furniture_Counter", "Counter", FurnitureCategory.Kitchen, 700f, 1500f, 13f,
-                    new Vector2Int(4, 2), 0.95f, new Vector3(2f, 0.95f, 0.7f),
-                    new Color(0.80f, 0.74f, 0.62f), MassCategory.Heavy),
-                MakeFurniture("Furniture_KitchenSink", "Kitchen Sink", FurnitureCategory.Kitchen, 620f, 1350f, 12f,
-                    new Vector2Int(2, 2), 0.95f, new Vector3(0.9f, 0.95f, 0.65f),
-                    new Color(0.88f, 0.90f, 0.92f), MassCategory.Medium),
-
-                // Bathroom
-                MakeFurniture("Furniture_Toilet", "Toilet", FurnitureCategory.Bathroom, 480f, 1200f, 10f,
-                    new Vector2Int(2, 2), 0.8f, new Vector3(0.6f, 0.8f, 0.75f),
-                    new Color(0.95f, 0.96f, 0.97f), MassCategory.Medium),
-                MakeFurniture("Furniture_Shower", "Shower", FurnitureCategory.Bathroom, 1250f, 2500f, 19f,
-                    new Vector2Int(3, 3), 2.1f, new Vector3(1.2f, 2.1f, 1.2f),
-                    new Color(0.72f, 0.86f, 0.90f), MassCategory.Heavy),
-                MakeFurniture("Furniture_BathroomSink", "Bathroom Sink", FurnitureCategory.Bathroom, 420f, 950f, 10f,
-                    new Vector2Int(2, 1), 0.9f, new Vector3(0.8f, 0.9f, 0.5f),
-                    new Color(0.93f, 0.95f, 0.96f), MassCategory.Medium),
-                MakeFurniture("Furniture_Mirror", "Mirror", FurnitureCategory.Bathroom, 240f, 620f, 11f,
-                    new Vector2Int(2, 1), 0.9f, new Vector3(0.8f, 0.9f, 0.08f),
-                    new Color(0.80f, 0.88f, 0.92f), MassCategory.Light),
-
-                // Decoration — no preferred room, so it earns full design points anywhere.
-                MakeFurniture("Furniture_Plant", "Plant", FurnitureCategory.Decoration, 150f, 340f, 12f,
-                    new Vector2Int(1, 1), 1.1f, new Vector3(0.45f, 1.1f, 0.45f),
-                    new Color(0.34f, 0.68f, 0.36f), MassCategory.Light),
-                MakeFurniture("Furniture_Painting", "Painting", FurnitureCategory.Decoration, 320f, 780f, 15f,
-                    new Vector2Int(2, 1), 0.8f, new Vector3(0.9f, 0.8f, 0.07f),
-                    new Color(0.85f, 0.62f, 0.30f), MassCategory.Light),
-                MakeFurniture("Furniture_Rug", "Rug", FurnitureCategory.Decoration, 280f, 640f, 13f,
-                    new Vector2Int(4, 3), 0.06f, new Vector3(2f, 0.06f, 1.5f),
-                    new Color(0.72f, 0.30f, 0.32f), MassCategory.Light),
-                MakeFurniture("Furniture_Clock", "Clock", FurnitureCategory.Decoration, 130f, 300f, 8f,
-                    new Vector2Int(1, 1), 0.4f, new Vector3(0.4f, 0.4f, 0.08f),
-                    new Color(0.94f, 0.90f, 0.80f), MassCategory.Light)
-            };
+                EditorUtility.SetDirty(data);
+                furniture.Add(data);
+            }
 
             PlacementCatalog catalog = CreateData<PlacementCatalog>(DataRoot, "PlacementCatalog");
             catalog.EditorSetContents(buildings, furniture);
@@ -293,42 +229,16 @@ namespace HouseFlip.EditorTools
             return catalog;
         }
 
-        private static BuildingData MakeBuilding(string assetName, string displayName, float cost,
-            float value, Vector2Int size, float height, Vector3 prefabSize, Color color, MassCategory mass)
+        private static void ApplyCommon(PlaceableData data, PlaceableDefinition definition)
         {
-            BuildingData data = CreateData<BuildingData>($"{DataRoot}/Building", assetName);
-            data.itemName = displayName;
-            data.cost = cost;
-            data.valueContribution = value;
-            data.size = size;
-            data.height = height;
-            data.designPoints = 4f;
-            data.prefab = BuildPlaceablePrefab(assetName, prefabSize, color, mass);
-            EditorUtility.SetDirty(data);
-            return data;
-        }
-
-        private static FurnitureData MakeFurniture(string assetName, string displayName,
-            FurnitureCategory category, float cost, float value, float designPoints,
-            Vector2Int size, float height, Vector3 prefabSize, Color color, MassCategory mass)
-        {
-            FurnitureData data = CreateData<FurnitureData>($"{DataRoot}/Furniture", assetName);
-            data.itemName = displayName;
-            data.category = category;
-            data.cost = cost;
-            data.valueContribution = value;
-            data.designPoints = designPoints;
-            data.size = size;
-            data.height = height;
-
-            // Decoration suits any room; everything else is judged on where it lands.
-            data.preferredRooms = category == FurnitureCategory.Decoration
-                ? new FurnitureCategory[0]
-                : new[] { category };
-
-            data.prefab = BuildPlaceablePrefab(assetName, prefabSize, color, mass);
-            EditorUtility.SetDirty(data);
-            return data;
+            data.itemName = definition.DisplayName;
+            data.cost = definition.Cost;
+            data.valueContribution = definition.ValueContribution;
+            data.designPoints = definition.DesignPoints;
+            data.size = definition.Size;
+            data.height = definition.Height;
+            data.prefab = BuildPlaceablePrefab(
+                definition.AssetName, definition.PrefabSize, definition.Color, definition.Mass);
         }
 
         // ------------------------------------------------------------------

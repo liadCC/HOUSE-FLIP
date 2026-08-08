@@ -313,22 +313,55 @@ namespace HouseFlip.Tests
         public void HouseValue_ClawsBackTheBonusWhenFurnitureIsRemoved()
         {
             // Selling a sofa back must not leave its value baked into the house.
-            HouseValueManager manager = ServerHouseValue();
+            RoomController room = Room();
+            RoomRegistry.Register(room);
 
-            manager.OnFurniturePlaced(2600f);
-            manager.OnFurnitureRemoved(2600f);
+            room.AddFurnitureValue(2600f);
+            room.AddFurnitureValue(-2600f);
 
-            Assert.That(manager.BuildBreakdown().FurnitureBonus, Is.EqualTo(0f).Within(0.01f));
+            Assert.That(ServerHouseValue().BuildBreakdown().FurnitureBonus, Is.EqualTo(0f).Within(0.01f));
         }
 
         [Test]
         public void HouseValue_FurnitureBonusNeverGoesNegative()
         {
-            HouseValueManager manager = ServerHouseValue();
+            RoomController room = Room();
+            RoomRegistry.Register(room);
 
-            manager.OnFurnitureRemoved(5000f);
+            room.AddFurnitureValue(-5000f);
 
-            Assert.That(manager.BuildBreakdown().FurnitureBonus, Is.EqualTo(0f));
+            Assert.That(room.FurnitureValue.Value, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void HouseValue_FurnitureIsCappedPerRoomToStopFarming()
+        {
+            // Every catalog item is worth more than it costs, so without this cap a player
+            // could place the same cabinet forever and print money.
+            RoomController room = Room();
+            RoomRegistry.Register(room);
+
+            for (int i = 0; i < 50; i++)
+            {
+                room.AddFurnitureValue(1000f);
+            }
+
+            Assert.That(room.FurnitureValue.Value,
+                Is.EqualTo(GameConstants.MaxFurnitureValuePerRoom).Within(0.01f));
+        }
+
+        [Test]
+        public void DesignPointsAreCappedPerRoomToStopRepaintFarming()
+        {
+            RoomController room = Room();
+
+            for (int i = 0; i < 100; i++)
+            {
+                room.AddDesignPoints(25f);
+            }
+
+            Assert.That(room.DesignPoints.Value,
+                Is.EqualTo(GameConstants.MaxDesignPointsPerRoom).Within(0.01f));
         }
 
         [Test]
@@ -348,13 +381,10 @@ namespace HouseFlip.Tests
             // Starting a second round must not inherit the first round's renovation.
             HouseValueManager manager = ServerHouseValue();
             manager.OnRepairComplete(5000f);
-            manager.OnFurniturePlaced(3000f);
 
             manager.ServerResetForNewRound();
 
-            HouseValueBreakdown breakdown = manager.BuildBreakdown();
-            Assert.That(breakdown.RenovationBonus, Is.EqualTo(0f));
-            Assert.That(breakdown.FurnitureBonus, Is.EqualTo(0f));
+            Assert.That(manager.BuildBreakdown().RenovationBonus, Is.EqualTo(0f));
         }
 
         [Test]

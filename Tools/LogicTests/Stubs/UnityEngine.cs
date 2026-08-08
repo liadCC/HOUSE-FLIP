@@ -281,6 +281,7 @@ namespace UnityEngine
         public static float Abs(float f) => Math.Abs(f);
         public static int Abs(int i) => Math.Abs(i);
         public static int FloorToInt(float f) => (int)Math.Floor(f);
+        public static int CeilToInt(float f) => (int)Math.Ceiling(f);
         public static int RoundToInt(float f) => (int)Math.Round(f, MidpointRounding.ToEven);
         public static float Exp(float f) => (float)Math.Exp(f);
         public static float Sin(float f) => (float)Math.Sin(f);

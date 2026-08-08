@@ -40,6 +40,16 @@ namespace HouseFlip.Economy
         public readonly NetworkVariable<float> DesignPoints = new NetworkVariable<float>(
             0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        /// <summary>
+        /// House value contributed by furniture placed in this room, capped.
+        ///
+        /// Held per room rather than as one global total specifically so it can be capped:
+        /// any item worth more than it costs would otherwise be placeable over and over
+        /// for unbounded profit.
+        /// </summary>
+        public readonly NetworkVariable<float> FurnitureValue = new NetworkVariable<float>(
+            0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         /// <summary>Permanent hit applied when a random event is left unresolved (GDD 21).</summary>
         public readonly NetworkVariable<float> CleanlinessPenalty = new NetworkVariable<float>(
             0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -171,11 +181,24 @@ namespace HouseFlip.Economy
             }
 
             FurnitureCount.Value = Mathf.Max(0, FurnitureCount.Value + delta);
-            DesignPoints.Value = Mathf.Max(0f, DesignPoints.Value + designPoints);
+            AddDesignPoints(designPoints);
+        }
+
+        /// <summary>Server only. Furniture value for this room, clamped to the per-room cap.</summary>
+        public void AddFurnitureValue(float value)
+        {
+            if (!IsServer)
+            {
+                return;
+            }
+
+            FurnitureValue.Value = Mathf.Clamp(
+                FurnitureValue.Value + value, 0f, GameConstants.MaxFurnitureValuePerRoom);
+
             GameEvents.RaiseHouseStateDirty();
         }
 
-        /// <summary>Server only.</summary>
+        /// <summary>Server only. Design points for this room, clamped to the per-room cap.</summary>
         public void AddDesignPoints(float points)
         {
             if (!IsServer)
@@ -183,7 +206,9 @@ namespace HouseFlip.Economy
                 return;
             }
 
-            DesignPoints.Value = Mathf.Max(0f, DesignPoints.Value + points);
+            DesignPoints.Value = Mathf.Clamp(
+                DesignPoints.Value + points, 0f, GameConstants.MaxDesignPointsPerRoom);
+
             GameEvents.RaiseHouseStateDirty();
         }
 

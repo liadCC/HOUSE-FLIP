@@ -15,11 +15,35 @@ namespace HouseFlip.Core
         public const float SessionSeconds = 25f * 60f;
 
         // --- House value weights (GDD 16) --------------------------------
-        public const float MaxCleanlinessValuePerRoom = 5000f;
-        public const float DirtPenaltyPerUnit = 250f;
-        public const float StructuralDamagePenalty = 1200f;
-        public const float BrokenFixturePenalty = 800f;
-        public const float DesignPointValue = 40f;
+        //
+        // Tuned against Balance/BalanceModel, not guessed. The originals made a profit
+        // unavoidable: cleaning alone was worth $30,000 for no money at all, and design
+        // points paid $40 each, so any team cleared +$70,000 without thinking. See
+        // Tools/README.md for the outcome curve these produce.
+
+        /// <summary>Cleaning is hygiene, not the main value driver — it mostly avoids the dirt penalty.</summary>
+        public const float MaxCleanlinessValuePerRoom = 1200f;
+
+        public const float DirtPenaltyPerUnit = 300f;
+
+        /// <summary>Wrecking load-bearing structure should really hurt: "don't destroy it completely".</summary>
+        public const float StructuralDamagePenalty = 2000f;
+
+        public const float BrokenFixturePenalty = 900f;
+
+        public const float DesignPointValue = 7f;
+
+        /// <summary>
+        /// Ceiling on how much furniture value one room can contribute.
+        ///
+        /// Without this, any item whose value exceeds its cost could be placed repeatedly
+        /// for unbounded profit — cram twelve cabinets into the kitchen and the house is
+        /// worth a fortune. The cap makes the first few pieces per room the ones that count.
+        /// </summary>
+        public const float MaxFurnitureValuePerRoom = 8000f;
+
+        /// <summary>Same reasoning for design: stops wall-repainting and plant-spam farming.</summary>
+        public const float MaxDesignPointsPerRoom = 150f;
 
         // --- Room score weights (GDD 17) ---------------------------------
         public const float WeightCleanliness = 0.25f;

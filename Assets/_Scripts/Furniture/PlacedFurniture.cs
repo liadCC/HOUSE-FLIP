@@ -54,7 +54,10 @@ namespace HouseFlip.Furniture
                 _room.AddFurniture(1, DesignPointsForRoom(data, room));
             }
 
-            HouseValueManager.Instance?.OnFurniturePlaced(data.valueContribution);
+            // Value is credited to the room, not to a global total, so the per-room cap
+            // applies. Placing twelve cabinets in one kitchen must not pay twelve times.
+            _room?.AddFurnitureValue(data.valueContribution);
+
             GameEvents.RaiseHouseStateDirty();
         }
 
@@ -124,7 +127,7 @@ namespace HouseFlip.Furniture
                 _room.AddFurniture(-1, -DesignPointsForRoom(_data, _room));
             }
 
-            HouseValueManager.Instance?.OnFurnitureRemoved(_data.valueContribution);
+            _room?.AddFurnitureValue(-_data.valueContribution);
             GameEvents.RaiseHouseStateDirty();
         }
 

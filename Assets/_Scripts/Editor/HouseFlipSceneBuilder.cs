@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HouseFlip.Audio;
+using HouseFlip.Balance;
 using HouseFlip.Building;
 using HouseFlip.Cleaning;
 using HouseFlip.Core;
@@ -39,30 +40,9 @@ namespace HouseFlip.EditorTools
         private const string ScenePath = "Assets/_Scenes/HouseFlip_MVP.unity";
         private const string PlayerPrefabPath = "Assets/_Prefabs/Player.prefab";
 
-        private const float WallHeight = 3f;
-        private const float WallThickness = 0.2f;
-        private const float DoorWidth = 1.6f;
-
-        private struct RoomRect
-        {
-            public string Name;
-            public float MinX, MaxX, MinZ, MaxZ;
-
-            public Vector3 Center => new Vector3((MinX + MaxX) * 0.5f, 0f, (MinZ + MaxZ) * 0.5f);
-            public float Width => MaxX - MinX;
-            public float Depth => MaxZ - MinZ;
-        }
-
-        // The MVP house: five interior rooms off a central hallway, plus a yard (GDD 4).
-        private static readonly RoomRect[] Rooms =
-        {
-            new RoomRect { Name = "Living Room", MinX = -9f, MaxX = -1f, MinZ = 0f, MaxZ = 7f },
-            new RoomRect { Name = "Kitchen", MinX = -9f, MaxX = -1f, MinZ = 7f, MaxZ = 13f },
-            new RoomRect { Name = "Hallway", MinX = -1f, MaxX = 2f, MinZ = 0f, MaxZ = 13f },
-            new RoomRect { Name = "Bedroom", MinX = 2f, MaxX = 10f, MinZ = 0f, MaxZ = 7f },
-            new RoomRect { Name = "Bathroom", MinX = 2f, MaxX = 10f, MinZ = 7f, MaxZ = 13f },
-            new RoomRect { Name = "Yard", MinX = -9f, MaxX = 10f, MinZ = -9f, MaxZ = 0f }
-        };
+        private const float WallHeight = HouseDefinition.WallHeight;
+        private const float WallThickness = HouseDefinition.WallThickness;
+        private const float DoorWidth = HouseDefinition.DoorWidth;
 
         [MenuItem("House Flip/Build MVP Scene", priority = 0)]
         public static void BuildScene()
@@ -160,7 +140,7 @@ namespace HouseFlip.EditorTools
 
             Material floorMaterial = HouseFlipAssetBuilder.GetMaterial("Mat_Floor", new Color(0.68f, 0.60f, 0.50f));
 
-            foreach (RoomRect room in Rooms)
+            foreach (RoomDefinition room in HouseDefinition.Rooms)
             {
                 bool isYard = room.Name == "Yard";
 
@@ -184,7 +164,7 @@ namespace HouseFlip.EditorTools
             return houseRoot;
         }
 
-        private static RoomController CreateRoomVolume(RoomRect room, Transform parent, bool isYard)
+        private static RoomController CreateRoomVolume(RoomDefinition room, Transform parent, bool isYard)
         {
             var volumeObject = new GameObject($"Room_{room.Name}");
             volumeObject.transform.SetParent(parent, false);
@@ -204,8 +184,7 @@ namespace HouseFlip.EditorTools
             var controller = volumeObject.AddComponent<RoomController>();
             HouseFlipAssetBuilder.SetPrivateField(controller, "roomName", room.Name);
 
-            // The yard is scored, but a scruffy garden should not sink the sale.
-            HouseFlipAssetBuilder.SetPrivateField(controller, "scoreWeight", isYard ? 0.4f : 1f);
+            HouseFlipAssetBuilder.SetPrivateField(controller, "scoreWeight", room.ScoreWeight);
 
             return controller;
         }
@@ -215,25 +194,10 @@ namespace HouseFlip.EditorTools
             var wallsRoot = new GameObject("Walls").transform;
             wallsRoot.SetParent(houseRoot, false);
 
-            // Perimeter — structural, so knocking one down is a real penalty (GDD 16).
-            AddWallRun(wallsRoot, "Wall_South", new Vector3(-9f, 0f, 0f), new Vector3(10f, 0f, 0f),
-                new[] { 0.5f }, structural: true);
-            AddWallRun(wallsRoot, "Wall_North", new Vector3(-9f, 0f, 13f), new Vector3(10f, 0f, 13f),
-                null, structural: true);
-            AddWallRun(wallsRoot, "Wall_West", new Vector3(-9f, 0f, 0f), new Vector3(-9f, 0f, 13f),
-                null, structural: true);
-            AddWallRun(wallsRoot, "Wall_East", new Vector3(10f, 0f, 0f), new Vector3(10f, 0f, 13f),
-                null, structural: true);
-
-            // Interior — non-structural, which is what the hammer is for (GDD 9).
-            AddWallRun(wallsRoot, "Wall_HallWest", new Vector3(-1f, 0f, 0f), new Vector3(-1f, 0f, 13f),
-                new[] { 3.5f, 10f }, structural: false);
-            AddWallRun(wallsRoot, "Wall_HallEast", new Vector3(2f, 0f, 0f), new Vector3(2f, 0f, 13f),
-                new[] { 3.5f, 10f }, structural: false);
-            AddWallRun(wallsRoot, "Wall_LivingKitchen", new Vector3(-9f, 0f, 7f), new Vector3(-1f, 0f, 7f),
-                null, structural: false);
-            AddWallRun(wallsRoot, "Wall_BedBath", new Vector3(2f, 0f, 7f), new Vector3(10f, 0f, 7f),
-                null, structural: false);
+            foreach (WallRunDefinition run in HouseDefinition.WallRuns)
+            {
+                AddWallRun(wallsRoot, run.Name, run.Start, run.End, run.Doors, run.Structural);
+            }
         }
 
         /// <summary>
@@ -332,7 +296,7 @@ namespace HouseFlip.EditorTools
             var propsRoot = new GameObject("Props").transform;
             propsRoot.SetParent(houseRoot, false);
 
-            foreach (RoomRect room in Rooms)
+            foreach (RoomDefinition room in HouseDefinition.Rooms)
             {
                 if (room.Name == "Yard")
                 {
@@ -340,7 +304,7 @@ namespace HouseFlip.EditorTools
                 }
 
                 // Dirt: the cleaning system's raw material (GDD 12).
-                int dirtCount = room.Name == "Hallway" ? 2 : 3;
+                int dirtCount = room.DirtCount;
                 for (int i = 0; i < dirtCount; i++)
                 {
                     Vector3 position = ScatterPoint(room, i, dirtCount);
@@ -350,8 +314,29 @@ namespace HouseFlip.EditorTools
                 // A burst pipe per room, dormant until the water leak event picks one.
                 pipes.Add(CreatePipe($"Pipe_{room.Name}", RoomCorner(room, 0.75f), propsRoot));
 
-                CreateRoomSpecificProps(room, propsRoot);
             }
+
+            // Broken fixtures, straight from the house definition so the balance model
+            // and the built scene can never disagree about how much work the house holds.
+            foreach (FixtureDefinition fixture in HouseDefinition.Fixtures)
+            {
+                RoomDefinition room = HouseDefinition.Room(fixture.Room);
+                CreateFixture(
+                    $"Fixture_{fixture.Label.Replace(" ", string.Empty)}_{fixture.Room.Replace(" ", string.Empty)}",
+                    room.Center + fixture.Offset,
+                    fixture.Label, fixture.Tool, fixture.Cost, fixture.ValueBonus, propsRoot);
+            }
+
+            // A little loose junk to smash and shove around (GDD 9).
+            CreateJunk("Junk_OldSofa", HouseDefinition.Room("Living Room").Center + new Vector3(-2f, 0f, -1.5f),
+                new Vector3(2f, 0.8f, 0.9f), new Color(0.45f, 0.40f, 0.34f), propsRoot);
+            CreateJunk("Junk_OldCabinet", HouseDefinition.Room("Kitchen").Center + new Vector3(2.5f, 0f, 1.5f),
+                new Vector3(1.2f, 1.8f, 0.6f), new Color(0.48f, 0.36f, 0.24f), propsRoot);
+            CreateJunk("Junk_OldWardrobe", HouseDefinition.Room("Bedroom").Center + new Vector3(-2.5f, 0f, 1.8f),
+                new Vector3(1.4f, 2f, 0.7f), new Color(0.42f, 0.32f, 0.24f), propsRoot);
+            CreateLooseProp("Prop_Box", HouseDefinition.Room("Hallway").Center + new Vector3(0f, 0.4f, 3f),
+                new Vector3(0.6f, 0.6f, 0.6f), new Color(0.72f, 0.58f, 0.36f),
+                MassCategory.Light, propsRoot);
 
             // The fuse box lives in the hallway so the blackout hunt has one obvious target.
             FuseBox fuseBox = CreateFuseBox(new Vector3(1.7f, 1.3f, 6.5f), propsRoot);
@@ -359,51 +344,7 @@ namespace HouseFlip.EditorTools
             return fuseBox;
         }
 
-        private static void CreateRoomSpecificProps(RoomRect room, Transform parent)
-        {
-            switch (room.Name)
-            {
-                case "Living Room":
-                    CreateJunk("Junk_OldSofa", room.Center + new Vector3(-2f, 0f, -1.5f),
-                        new Vector3(2f, 0.8f, 0.9f), new Color(0.45f, 0.40f, 0.34f), parent);
-                    CreateFixture("Fixture_BrokenLight_Living", room.Center + new Vector3(0f, 2.6f, 0f),
-                        "Broken Light", ToolType.Screwdriver, 150f, 700f, parent);
-                    break;
-
-                case "Kitchen":
-                    CreateJunk("Junk_OldCabinet", room.Center + new Vector3(2.5f, 0f, 1.5f),
-                        new Vector3(1.2f, 1.8f, 0.6f), new Color(0.48f, 0.36f, 0.24f), parent);
-                    CreateFixture("Fixture_LeakingFaucet_Kitchen", room.Center + new Vector3(-2.5f, 1f, 2f),
-                        "Leaking Faucet", ToolType.Wrench, 200f, 850f, parent);
-                    CreateFixture("Fixture_FaultyOutlet_Kitchen", room.Center + new Vector3(2f, 0.4f, -2f),
-                        "Faulty Outlet", ToolType.Screwdriver, 250f, 950f, parent);
-                    break;
-
-                case "Bedroom":
-                    CreateJunk("Junk_OldWardrobe", room.Center + new Vector3(-2.5f, 0f, 1.8f),
-                        new Vector3(1.4f, 2f, 0.7f), new Color(0.42f, 0.32f, 0.24f), parent);
-                    CreateFixture("Fixture_BrokenWindow_Bedroom", room.Center + new Vector3(3.6f, 1.4f, 0f),
-                        "Broken Window", ToolType.Hammer, 400f, 1300f, parent);
-                    break;
-
-                case "Bathroom":
-                    CreateFixture("Fixture_BrokenToilet", room.Center + new Vector3(-2f, 0.4f, -1.5f),
-                        "Broken Toilet", ToolType.Wrench, 300f, 1100f, parent);
-                    CreateFixture("Fixture_LeakingFaucet_Bath", room.Center + new Vector3(2f, 1f, 1.5f),
-                        "Leaking Faucet", ToolType.Wrench, 200f, 850f, parent);
-                    break;
-
-                case "Hallway":
-                    CreateFixture("Fixture_FaultyOutlet_Hall", room.Center + new Vector3(0f, 0.4f, -4f),
-                        "Faulty Outlet", ToolType.Screwdriver, 250f, 950f, parent);
-                    CreateLooseProp("Prop_Box", room.Center + new Vector3(0f, 0.4f, 3f),
-                        new Vector3(0.6f, 0.6f, 0.6f), new Color(0.72f, 0.58f, 0.36f),
-                        MassCategory.Light, parent);
-                    break;
-            }
-        }
-
-        private static Vector3 ScatterPoint(RoomRect room, int index, int count)
+        private static Vector3 ScatterPoint(RoomDefinition room, int index, int count)
         {
             // Deterministic spread so a rebuild produces the same house.
             float t = (index + 1f) / (count + 1f);
@@ -412,7 +353,7 @@ namespace HouseFlip.EditorTools
             return new Vector3(x, 0.02f, z);
         }
 
-        private static Vector3 RoomCorner(RoomRect room, float inset)
+        private static Vector3 RoomCorner(RoomDefinition room, float inset)
         {
             return new Vector3(room.MinX + inset, 0.05f, room.MaxZ - inset);
         }
