@@ -25,6 +25,28 @@ namespace HouseFlip.Economy
 
         public static void Clear() => Rooms.Clear();
 
+        /// <summary>
+        /// Room whose bounds actually contain the point, or null.
+        ///
+        /// Use this for anything that grants credit. <see cref="FindRoom"/> falls back to
+        /// the nearest room, which is right for registering fixed scenery that sits on a
+        /// boundary, but wrong for scoring: with the fallback, furniture dropped on the
+        /// lawn — or anywhere outside the house at all — is still credited house value to
+        /// whichever room happens to be closest.
+        /// </summary>
+        public static RoomController FindContainingRoom(Vector3 worldPosition)
+        {
+            foreach (RoomController room in Rooms)
+            {
+                if (room != null && room.Contains(worldPosition))
+                {
+                    return room;
+                }
+            }
+
+            return null;
+        }
+
         /// <summary>Room whose bounds contain the point, else the nearest room centre.</summary>
         public static RoomController FindRoom(Vector3 worldPosition)
         {

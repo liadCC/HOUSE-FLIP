@@ -133,11 +133,14 @@ namespace HouseFlip.Furniture
                 return;
             }
 
-            RoomController current = RoomRegistry.FindRoom(transform.position);
-            if (current == null || current == _room)
+            RoomController current = RoomRegistry.FindContainingRoom(transform.position);
+            if (current == _room)
             {
                 return;
             }
+
+            // current == null means it has been carried out of the house entirely, so the
+            // credit is removed and not re-granted until it is brought back inside.
 
             ServerRemoveContribution();
             ServerApplyContribution(current);

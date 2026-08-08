@@ -260,7 +260,9 @@ namespace HouseFlip.Networking
 
             networkObject.Spawn(true);
 
-            RoomController room = RoomRegistry.FindRoom(position);
+            // Strict: an item placed outside every room credits nothing, rather than
+            // paying whichever room happens to be nearest.
+            RoomController room = RoomRegistry.FindContainingRoom(position);
             placed.ServerInitialise(data, room);
 
             PlayerStatsTracker.Record(sender, PlayerStat.FurniturePlaced, 1f);
