@@ -692,6 +692,7 @@ namespace HouseFlip.EditorTools
 
             var ui = new GameObject("UI");
             ui.AddComponent<HUDController>();
+            ui.AddComponent<ToolbarUI>();
             ui.AddComponent<InteractionPromptUI>();
             ui.AddComponent<EventPopupUI>();
             ui.AddComponent<InspectionScreenUI>();

@@ -82,7 +82,10 @@ namespace HouseFlip.UI
                 new Vector2(-32f, -28f), new Vector2(520f, 52f));
             houseValueLabel.color = UIFactory.Good;
 
-            toolLabel = UIFactory.CreateText(root, "Tool", string.Empty, 26, TextAnchor.LowerRight,
+            // Key hints only. The equipped tool used to be named here as well, which was
+            // the only way to know what you were holding; the hotbar shows that — and the
+            // five you are not holding — along the bottom of the screen now.
+            toolLabel = UIFactory.CreateText(root, "Tool", "[F] shop    [B] build", 26, TextAnchor.LowerRight,
                 new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f),
                 new Vector2(-32f, 32f), new Vector2(520f, 40f));
 
@@ -96,7 +99,6 @@ namespace HouseFlip.UI
         private void Update()
         {
             UpdatePlayerList();
-            UpdateToolLabel();
 
             if (_warningTimer > 0f)
             {
@@ -145,23 +147,6 @@ namespace HouseFlip.UI
 
             playersLabel.supportRichText = true;
             playersLabel.text = _builder.ToString();
-        }
-
-        private void UpdateToolLabel()
-        {
-            if (toolLabel == null)
-            {
-                return;
-            }
-
-            PlayerController local = PlayerRegistry.LocalPlayer;
-            if (local == null || local.Tools == null)
-            {
-                toolLabel.text = string.Empty;
-                return;
-            }
-
-            toolLabel.text = $"{local.Tools.CurrentTool.DisplayName()}   [1-5] tools  [F] shop  [B] build";
         }
 
         private void OnBudgetChanged(float value)

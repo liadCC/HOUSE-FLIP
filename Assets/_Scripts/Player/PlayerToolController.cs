@@ -49,6 +49,25 @@ namespace HouseFlip.Player
             else if (Input.GetKeyDown(KeyCode.Alpha4)) Equip(ToolType.CleaningTool);
             else if (Input.GetKeyDown(KeyCode.Alpha5)) Equip(ToolType.PaintRoller);
             else if (Input.GetKeyDown(KeyCode.Alpha0)) Equip(ToolType.None);
+            else ScrollBelt();
+        }
+
+        /// <summary>
+        /// Mouse wheel walks the hotbar, as in every game that has one. Scrolling up moves
+        /// left along the bar, matching Minecraft — the direction people already have in
+        /// their fingers.
+        /// </summary>
+        private void ScrollBelt()
+        {
+            float scroll = Input.GetAxisRaw("Mouse ScrollWheel");
+            if (Mathf.Abs(scroll) < 0.01f)
+            {
+                return;
+            }
+
+            // Never toggles: a scroll is a move to a specific slot, and stopping on the
+            // slot you were already holding would put the tool away instead.
+            Select(ToolBelt.Cycle(_currentTool.Value, scroll > 0f ? -1 : 1));
         }
 
         public void Equip(ToolType tool)
@@ -60,6 +79,15 @@ namespace HouseFlip.Player
 
             // Toggling the equipped tool puts it away, which is handy for grabbing things.
             _currentTool.Value = _currentTool.Value == tool ? ToolType.None : tool;
+        }
+
+        /// <summary>Equips exactly what it is given, with no put-away toggle.</summary>
+        public void Select(ToolType tool)
+        {
+            if (IsOwner)
+            {
+                _currentTool.Value = tool;
+            }
         }
 
         public void SetPaintColorIndex(int index)

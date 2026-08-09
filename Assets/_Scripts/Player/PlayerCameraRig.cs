@@ -16,7 +16,13 @@ namespace HouseFlip.Player
         [SerializeField] private Vector3 pivotOffset = new Vector3(0f, 1.55f, 0f);
 
         [Header("Orbit")]
-        [SerializeField] private float distance = 4.2f;
+        [SerializeField] private float distance = 5.2f;
+
+        [Tooltip("Sideways offset so the character sits off-centre and does not block the view.")]
+        [SerializeField] private float shoulderOffset = 0.65f;
+
+        [Tooltip("Never pull closer than this. Below roughly 1.8m the camera is inside the character.")]
+        [SerializeField] private float minDistance = 2.1f;
         [SerializeField] private float minPitch = -35f;
         [SerializeField] private float maxPitch = 70f;
         [SerializeField] private float mouseSensitivity = 2.6f;
@@ -91,7 +97,23 @@ namespace HouseFlip.Player
             }
 
             Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);
-            Vector3 pivot = _target.position + pivotOffset;
+
+            // Offset the pivot to the shoulder so the character does not sit dead centre
+            // with their own head over everything they are trying to aim at. The offset is
+            // swept rather than applied blindly: standing with your shoulder against a wall
+            // would otherwise put the pivot on the far side of it, and everything below
+            // would then measure its distance from inside the neighbouring room.
+            Vector3 head = _target.position + pivotOffset;
+            Vector3 side = rotation * Vector3.right;
+            float sideDistance = shoulderOffset;
+
+            if (Physics.SphereCast(head, collisionRadius, side, out RaycastHit sideHit, shoulderOffset,
+                    collisionMask, QueryTriggerInteraction.Ignore))
+            {
+                sideDistance = Mathf.Max(0f, sideHit.distance - 0.05f);
+            }
+
+            Vector3 pivot = head + side * sideDistance;
 
             float desiredDistance = distance;
             Vector3 back = rotation * Vector3.back;
@@ -99,7 +121,11 @@ namespace HouseFlip.Player
             if (Physics.SphereCast(pivot, collisionRadius, back, out RaycastHit hit, distance,
                     collisionMask, QueryTriggerInteraction.Ignore))
             {
-                desiredDistance = Mathf.Max(0.6f, hit.distance - 0.05f);
+                // Clamped at minDistance rather than 0.6. In rooms this size the old floor
+                // let a wall behind you drag the camera inside your own torso — you ended up
+                // looking out through the back of the model, seeing the arm and tool poking
+                // out in front and nothing else, which reads as "there is no character".
+                desiredDistance = Mathf.Max(minDistance, hit.distance - 0.05f);
             }
 
             // Snap in fast when a wall appears, ease out slowly when it clears —
@@ -123,7 +149,9 @@ namespace HouseFlip.Player
             }
 
             Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);
-            transform.position = _target.position + pivotOffset + rotation * Vector3.back * distance;
+            transform.position = _target.position + pivotOffset
+                                 + rotation * Vector3.right * shoulderOffset
+                                 + rotation * Vector3.back * distance;
             transform.rotation = rotation;
             _currentDistance = distance;
         }
